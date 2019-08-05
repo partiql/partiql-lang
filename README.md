@@ -1,18 +1,13 @@
-## My Project
+#  PartiQL Lang
 
-TODO: Fill this README out!
-
-Be sure to:
-
-* Change the title in this README
-* Edit your repository description on GitHub
+The language specification of PartiQL.
 
 ## Security
 
 See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
 
-## License Summary
+## License
 
-The documentation is made available under the Creative Commons Attribution-ShareAlike 4.0 International License. See the LICENSE file.
+This specification is licensed under the PartiQL Specification License. 
 
 The sample code within this documentation is made available under the MIT-0 license. See the LICENSE-SAMPLECODE file.
