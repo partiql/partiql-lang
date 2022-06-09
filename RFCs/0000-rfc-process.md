@@ -18,18 +18,18 @@ The changes that require RFC are but not limited to the following:
 
 The changes that don’t require RFC are but not limited to the following:
 
-* Rephrasing, rewording the existing specification where the change does not affect the semantic—e.g. making ORDER BY section more clear.
+* Rephrasing or rewording the existing specification where the change does not affect the semantics—e.g. making ORDER BY section more clear.
 * Bug fixes.
-* Implementing feature that are already exist in PartiQL specification—e.g. implementing ORDER BY.
+* Implementing features that already exist in PartiQL specification—e.g. implementing ORDER BY.
 * Performance improvements—e.g. improve the PartiQL’s CLI performance.
-* Changes to back-end that does not break consumers.
+* Changes to that back-end that don't break consumers.
 
 ## The Process
 
-Before submitting the RFC, try to discuss your idea using a pre-RFC document with PartiQL maintainers and community via [PartiQL Forum](https://community.partiql.org/faq)or [GitHub](https://github.com/partiql/).  This helps to solicit an early feedback and getting a sense of how the proposed change is going to be seen by PartiQL maintainers and community.
+Before submitting the RFC, discuss your idea using a pre-RFC document with PartiQL maintainers and community via [PartiQL Forum](https://community.partiql.org/faq)or [GitHub](https://github.com/partiql/).  This helps to solicit early feedback and gather a sense of how the proposed change will be seen by PartiQL maintainers and community.
 
 1. Fork this repository at https://github.com/partiql/partiql-doc
-2. Copy `templates/0000-template.rst` to `RFCs/0000-RFC-NAME.rst`; do not assign a number yet.
+2. Copy `templates/0000-template.md` to `RFCs/0000-RFC-NAME.md`; do not assign a number yet.
 3. Complete the RFC text using the template.
 4. Create a pull request to this repository.
 5. Add the pull request number to the RFC filename and pull request address to the placeholder in the template.
