@@ -26,7 +26,7 @@ The changes that don’t require RFC are but not limited to the following:
 
 ## The Process
 
-Before submitting the RFC, discuss your idea using a pre-RFC document with PartiQL maintainers and community via [PartiQL Forum](https://community.partiql.org/faq)or [GitHub](https://github.com/partiql/).  This helps to solicit early feedback and gather a sense of how the proposed change will be seen by PartiQL maintainers and community.
+Before submitting the RFC, discuss your idea using a pre-RFC document with PartiQL maintainers and community via [PartiQL Forum](https://community.partiql.org/faq)or [GitHub](https://github.com/partiql/). This helps to solicit early feedback and gather a sense of how the proposed change will be seen by PartiQL maintainers and community.
 
 1. Fork this repository at https://github.com/partiql/partiql-doc
 2. Copy `templates/0000-template.md` to `RFCs/0000-RFC-NAME.md`; do not assign a number yet.
