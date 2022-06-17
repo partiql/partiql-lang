@@ -1,6 +1,6 @@
-- Change Name: (fill me in with a unique ident, `my_awesome_feature`)
 - Start Date: (fill me in with today's date, YYYY-MM-DD)
-- PR Link: (fill me in with the PR link once PR is created)
+- PartiQL Issue (fill me in with the related PartiQL issue)
+- RFC PR: (fill me in with the PR link once PR is created)
 
 # Summary
 [summary]: #summary
