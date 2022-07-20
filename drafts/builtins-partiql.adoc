@@ -1,0 +1,252 @@
+= PartiQL Builtins Support
+:table-caption!:
+
+Reference xref:builtins-sql.adoc[SQL Builtins]
+
+.Aggregations
+[cols="1,1,3,3",frame=none]
+|===
+|Identifier ^|Support |Description |Comment
+
+|COUNT_STAR
+^|🟩
+|Counts the number of rows
+|
+
+|COUNT
+^|🟩
+|Standard aggregate count
+|
+
+|SUM
+^|🟩
+|Standard aggregate summation
+|
+
+|MIN
+^|🟩
+|Standard aggregate minimum
+|
+
+|MAX
+^|🟩
+|Standard aggregate maximum
+|
+
+|EVERY
+^|🟥
+|Returns true if all inputs are true
+|
+
+|ANY
+^|🟥
+|??
+|
+
+|SOME
+^|🟥
+|??
+|
+
+| STDDEV_POP
+^|🟥
+|Population standard deviation
+|
+
+| STDDEV_SAMP
+^|🟥
+|Sample standard deviation
+|
+
+|VAR_POP
+^|🟥
+|Population variance
+|
+
+|VAR_SAMP
+^|🟥
+|Sample variance
+|
+
+|COVAR_POP
+^|🟥
+|Population covariance
+|
+
+|COVAR_SAMP
+^|🟥
+|Sample covariance
+|
+
+|CORR
+^|🟥
+|Correlation coefficient
+|
+
+|===
+
+.Comparisons
+[cols="1,1,3,3",frame=none]
+|===
+|Identifier ^|Support |Description |Comment
+
+|LT
+^|🟩
+|Value less than comparison
+|
+
+|LTE
+^|🟩
+|Value less than or equal to comparison
+|
+
+|GT
+^|🟩
+|Value greater than comparison
+|
+
+|GTE
+^|🟩
+|Value greater than or equal to comparison
+|
+
+|EQ
+^|🟩
+|Value equality
+|
+
+|NEQ
+^|🟩
+|Negation of value equality
+|
+
+|===
+
+.Numeric
+[cols="1,1,3,3",frame=none]
+|===
+|Identifier ^|Support |Description |Comment
+
+|PLUS
+^|🟩
+|Addition of two numeric types
+|
+
+|MINUS
+^|🟩
+|Subtraction of two numeric types
+|
+
+|MULT
+^|🟩
+|Multiplication of two numeric types
+|
+
+|DIV
+^|🟩
+|Integer division of two numeric types
+|
+
+|MOD
+^|🟩
+|Modulus
+|
+
+|CEILING
+^|🟩
+|Numeric ceiling
+|
+
+|FLOOR
+^|🟩
+|Numeric floor
+|
+
+|ABS
+^|🟥
+|Absolute value
+|
+
+|SQRT
+^|🟥
+|Square root
+|
+
+|EXP
+^|🟥
+|Exponential function
+|
+
+|POWER
+^|🟥
+|Exponentiation
+|
+
+|LN
+^|🟥
+|Natural log
+|
+
+|===
+
+.Strings
+[cols="1,1,3,3",frame=none]
+|===
+|Identifier ^|Support |Description |Comment
+
+|CONCAT
+^|🟩
+|String concatenation
+|
+
+|LOWER
+^|🟩
+|String lowercase
+|
+
+|UPPER
+^|🟩
+|String uppercase
+|
+
+|CHAR_LENGTH
+^|🟩
+|Characters in a string
+|
+
+|SUBSTRING
+^|🟩
+|Substring from range
+|
+
+|BIT_LENGTH
+^|🟥
+|Bits in a string
+|
+
+|OCTET_LENGTH
+^|🟥
+|Bytes in a string
+|
+
+|SUBSTRING_PATTERN
+^|🟥
+|Substring from a SQL regular expression
+|
+
+|TRIM
+^|🟥
+|Trim characters from the ends of a string
+| LEADING or TRAILING are missing; as well as characters to trim
+
+|POSITION
+^|🟥
+|Get position of substring in a string
+|
+
+|OVERLAY
+^|🟥
+| Replace content of a string
+|
+
+|===

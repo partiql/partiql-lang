@@ -1,0 +1,416 @@
+= SQL Builtins
+:table-caption!:
+
+== Preface
+This document contains the builtin functions as specified by the SQL standard, as well as a section on extended builtins which are not in the SQL spec, but are common amongst SQL implementations.
+
+=== References
+
+- https://www.postgresql.org/docs/current/functions-aggregate.html
+- https://www.postgresql.org/docs/current/functions-string.html
+- https://www.postgresql.org/docs/current/functions-math.html
+
+== Standard
+
+.Aggregations
+[cols="1,2,3,3",frame=none]
+|===
+|Identifier |Names |Signatures |Description
+
+|COUNT_STAR
+|count
+a|
+* `() -> bigint`
+
+|Returns the number of rows
+
+|COUNT
+|count
+a|
+* `(x: any) -> bigint`
+
+|Returns the number of rows for which x is not null
+
+|SUM
+|sum
+a|
+* `(x: T) -> T`
+
+T — any numeric, interval
+|Sum of _x_ for all non-null input values
+
+|MIN
+|min
+a|
+* `(x: T) -> T`
+
+T — any numeric, string, date/time
+|Minimum of _x_ for all non-null input values
+
+|MAX
+|max
+a|
+* `(x: T) -> T`
+
+T — any numeric, string, date/time
+|Maximum of _x_ for all non-null input values
+
+|EVERY
+|every
+a|
+* `(x: bool) -> bool`
+
+|Returns _true_ if all _x_ are _true_
+
+|ANY
+|any
+a|
+* `(x: bool) -> bool`
+
+|??
+
+|SOME
+|some
+a|
+* `(x: bool) -> bool`
+
+|??
+
+| STDDEV_POP
+| stddev_pop, stddev_population
+a|
+* `(x: T) -> double`
+
+T — smallint, int, bigint, real, double precision, or numeric
+|Population standard deviation
+
+| STDDEV_SAMP
+| stddev_samp, stddev_sample, stddev
+a|
+* `(x: T) -> double`
+
+T — smallint, int, bigint, real, double precision, or numeric
+|Sample standard deviation
+
+|VAR_POP
+|var_pop, var_population
+a|
+* `(x: T) -> double`
+
+T — smallint, int, bigint, real, double precision, or numeric
+|Population variance
+
+|VAR_SAMP
+| var_samp, var_sample, variance
+a|
+* `(x: T) -> double`
+
+T — smallint, int, bigint, real, double precision, or numeric
+|Sample variance
+
+|COVAR_POP
+|covar_pop, covar_population
+a|
+* `(x: double, y: double) -> double`
+
+|Population covariance
+
+|COVAR_SAMP
+|covar_samp, covar_sample, covar
+a|
+* `(x: double, y: double) -> double`
+
+|Sample covariance
+
+|CORR
+|corr
+a|
+* `(x: double, y: double) -> double`
+
+|Correlation coefficient
+
+|===
+
+.Comparisons
+All arguments must be comparable types _T_ as defined by the SQL specification subclause 4.12.
+[cols="1,2,3,3",frame=none]
+|===
+|Identifier |Names |Signatures |Description
+
+|LT
+|&lt;
+a|
+* `(x: T, y: T) -> boolean`
+
+|Returns _true_ if _x_ is less than _y_
+
+|LTE
+|&lt;=
+a|
+* `(x: T, y: T) -> boolean`
+
+|Returns _true_ if _x_ is less than or equal to _y_
+
+|GT
+|&gt;
+a|
+* `(x: T, y: T) -> boolean`
+
+|Returns _true_ if _x_ is greater than _y_
+
+
+|GTE
+|&gt;=
+a|
+* `(x: T, y: T) -> boolean`
+
+|Returns _true_ if _x_ is greater than or equal to _y_
+
+|EQ
+|=
+a|
+* `(x: T, y: T) -> boolean`
+
+|Returns _true_ if _x_ is equal to _y_
+
+|NEQ
+|!=, &lt;&gt;
+a|
+* `(x: T, y: T) -> boolean`
+
+|Returns _true_ if _x_ is not equal to _y_
+|===
+
+.Numeric
+[cols="1,2,3,3",frame=none]
+|===
+|Identifier |Names |Signatures |Description
+
+|PLUS
+|+
+a|
+* `(x: T) + (y: S)`
+|Addition of two numeric types _T_ and _S_
+
+|MINUS
+|-
+a|
+* `(x: T) - (y: S)`
+|Subtraction of two numeric types _T_ and _S_
+
+|MULT
+|*
+a|
+* `(x: T) * (y: S)`
+|Multiplication of two numeric types _T_ and _S_
+
+|DIV
+|/
+a|
+* `(x: T) / (y: S)`
+|Integer division of two numeric types _T_ and _S_
+
+|ABS
+|abs
+a|
+* `(x: T) -> T`
+|Returns the absolute value of _x_
+
+|MOD
+|mod
+a|
+* `(x: T, y: T) -> T`
+| Returns _x_ modulo _y_
+
+|CEILING
+| ceil, ceiling
+a|
+* `(x: T) -> T`
+|Returns the smallest integer greater than or equal to _x_
+
+|FLOOR
+|floor
+a|
+* `(x: T) -> T`
+|Returns the largest integer less than or equal to  _x_
+
+|SQRT
+|sqrt
+a|
+* `(x: T) -> T`
+
+T — double or numeric
+|Square root
+
+|EXP
+|exp
+a|
+* `(x: T) -> T`
+
+T — double or numeric
+|Exponential function e^x
+
+|POWER
+|power
+a|
+* `(x: double, y: double) -> double`
+|Returns _x_ raised to the power of _y_
+
+|LN
+|ln
+a|
+* `(x: T) -> T`
+
+T — double or numeric
+|Natural log of _x_
+
+|===
+
+.Strings
+[cols="1,2,3,3",frame=none]
+|===
+|Identifier |Names |Signatures |Description
+
+|CONCAT
+|\|\|
+a|
+* `(x: text, y: text) -> text`
+
+a|Concatenates _x_ and _y_
+
+Special form:
+
+x \|\| y
+
+|LOWER
+|lower
+a|
+* `(x: text) -> text`
+|Converts _x_ to lowercase
+
+|UPPER
+|upper
+a|
+* `(x: text) -> text`
+|Converts _x_ to uppercase
+
+|BIT_LENGTH
+|bit_length
+a|
+* `(x: text) -> text`
+|Returns the number of bits in _x_
+
+|CHAR_LENGTH
+|char_length, character_length
+a|
+* `(x: text) -> text`
+|Returns the number of characters in _x_
+
+|OCTET_LENGTH
+|octet_length
+a|
+* `(x: text) -> text`
+|Returns the number of bytes in _x_
+
+|SUBSTRING
+|substring
+a|
+* `(s: text, start: int, len: int) -> text`
+
+a|Returns the substring of _s_ starting at _start_ index for _len_ characters. If _start_ is not specified, 0 is the default. If _len_ is not specified, the substring will span to the end of _s_.
+
+Special form:
+
+`SUBSTRING(s [FROM start] [FOR len])`
+
+|SUBSTRING_PATTERN
+|substring
+a|
+* `(s: text, pattern: text) -> text`
+* `(s: text, pattern: text, esc: text) -> text`
+
+a|Extracts the first substring matching SQL regular expression
+
+Special form:
+
+`SUBSTRING(s SIMILAR pattern ESCAPE esc)`
+
+|TRIM
+|trim
+a|
+* `(x: text, y: text) -> text`
+a|Trims the characters _y_ (a space by default) from either the start, end, or both ends of _x_.
+
+Special form:
+
+`TRIM([LEADING\|TRAILING\|BOTH] [FROM] x [, y])`
+
+|POSITION
+|position
+a|
+* `(x: text, y: text) -> text`
+a|Returns first starting index of _y_ within _x_, or zero if it's not present.
+
+Special form:
+
+`POSITION(x IN y)`
+
+|OVERLAY
+|overlay
+a|
+* `(x: text, y: text, start: int) -> text`
+* `(x: text, y: text, start: int, count: int) -> text`
+
+a| Replaces the content _x_ with _y_ starting at _start_ and extending for _count_ or the length of _y_.
+
+Overlay has the special form:
+
+`OVERLAY(x PLACING y FROM start [FOR count])`
+
+|===
+
+== Extended
+
+.Aggregations
+[source,sql]
+-- Postgres regression functions 9.58
+-- Trino approximate aggregations
+-- https://trino.io/docs/current/functions/aggregate.html#approximate-aggregate-functions
+
+.Numeric
+[source,sql]
+x % y                -- MOD(x, y)
+x ^ y                -- POWER(x,y)
+x & y                -- bitwise AND
+x | y                -- bitwise OR
+~x                   -- bitwise NOT
+x << y               -- bitwise shift left
+x >> y               -- bitwise shift right
+SIGN(x)              -- sign
+ROUND(x)             -- round to nearest integer
+ROUND(x, d)          -- round to d decimal places
+TRUNC(x)             -- truncate toward 0
+TRUNC(x, d)          -- truncate to d decimal places
+LOG(b, x)            -- log x base b
+LOG(x)               -- log x base 10
+GREATEST(collection) -- returns the largest in collection
+LEAST(collection)    -- returns the smallest in collection
+SIN(x)               -- sine
+COS(x)               -- cosine
+TAN(x)               -- tangent
+COT(x)               -- cotangent
+ASIN(x)              -- arc sine
+ACOS(x)              -- arc cosine
+ATAN(x)              -- arc tangent
+PI()                 -- pi constant
+TRUNC(x)             -- truncate to integer
+
+.Strings
+[source,sql]
+ASCII(x)           -- convert character x to ASCII
+CHR(x)             -- convert ASCII x to character
+POSITION(x IN y)   -- alias for SUBSTRING_REGEX(x IN y FROM 0)
+LENGTH(x)          -- number of characters in string
+REPLACE(x, y, z)   -- replace all occurrences of y in x to z
+REVERSE(x)         -- reverse x
+TRIM(x)            -- alias for TRIM(BOTH ' ' FROM x)
