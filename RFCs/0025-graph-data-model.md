@@ -55,9 +55,9 @@ SELECT i, v FROM my_list AS v AT i
 ```
 
 For the graph data type, we model something very similar. A graph is a collection of *vertices* and *edges* that connect
-them with associated direction. All vertices and edges have a *label* (similar to the attribute name in struct) that
-must be a string or `NULL`. The value of a vertex or an edge can be any PartiQL value. The following diagram illustrates
-the model:
+them with associated direction (which may be un-directed). All vertices and edges have a *label* (similar to the
+attribute name in struct) that must be a string or `NULL`. The value of a vertex or an edge can be any PartiQL value.
+The following diagram illustrates the model:
 
 ![Example Graph](./0025-graph-data-model/graph.png)
 
