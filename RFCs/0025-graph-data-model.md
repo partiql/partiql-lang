@@ -81,6 +81,8 @@ graphs *could* have vertices or edges that themselves be graphs, and likewise va
 As an important example, *labeled property graphs (LPG)* of the GPML paper[^2] are modeled 
 straightforwardly in PartiQL: a value at each vertex and edge is restricted to be a PartiQL struct.
 
+<!-- TODO: The following RDF example may need adjustments to fit with the finalized data model.
+     E.g., NULL labels may have to become empty label sets.  -->
 Similarly, Resource Description Framework (RDF)[^1] graphs could be modeled in PartiQL by having non-literal, non-blank
 vertices and edges labeled by URI strings with their values being NULL. RDF literals could be a NULL labeled node with
 their value being any corresponding PartiQL value (this is a generalization of RDF as literals are only strings in RDF’s
@@ -90,6 +92,69 @@ never a valid scheme for a URI).
 Even though PartiQL defines a very general graph data model, it is *not required* that a host database actually supports arbitrary
 values at vertices or edges. This is similar to PartiQL over a relational database, where attributes of a row are
 restricted to scalars.
+
+## Addition to the PartiQL data model
+
+As outlined above, graphs are introduced as a new category of "native" values in the PartiQL
+data model, on par with scalar literals, structs, lists, and bags:
+
+```EBNF
+<partiql value> ::= 
+      <absent value>
+    | <scalar value>
+    | <tuple value>
+    | <collection value>
+    | <graph value>                  //new
+```
+Consequently, graph values can occur as members of structs, bags, and lists.
+
+## Graph data model
+
+For the graph values themselves, rather than giving a grammar -- as PartiQL specification does for
+other values -- we will define an abstract data model, largely following the one for PGML[^2].
+One of the reasons is that a concrete syntax for graph literals could emerge from ISO/IEC
+standardization, possibly as part of GQL, but no public information is yet available about
+that effort.  When appropriate, graph literals in PartiQL would be covered in a separate RFC.
+
+A *graph* (a PartiQL *graph value*) is a tuple
+
+>  < **Nodes**, **Edges**, **ends**, **labels**, **pay** >
+
+where
+
+- **Nodes** is a finite set of the *nodes* of the graph;
+- **Edges** is a finite set of the *edges* of the graph;
+- **ends** **:** **Edges** --> (**Nodes** *x* **Nodes**) union { {u,v} | u, v in **Nodes** }   
+  is a total function mapping each edge to its *endpoints*,
+  which are an either ordered or an unordered pair of nodes;
+- **labels** **:** (**Nodes** union **Edges**) --> P( *string_value* )
+  is a total function that maps each node and each edge to a set of string labels;
+- **pay** **:** (**Nodes** union **Edges**) --> *partiql_value* \ {`MISSING`}
+  is a total function that maps each node and each edge to its *payload*,
+  which is a PartiQL value that cannot be `MISSING`.
+
+The inhabitants of the sets **Nodes** and **Edges** are understood abstractly; all that is known
+about them is given by the functions **ends**, **labels**, and **pay**.  Intuitively, one can think
+of graph nodes and edges as uninterpreted identifiers, perhaps corresponding to some
+implementation-specific memory locations.
+
+The primary difference of this graph definition from the *property graph* in GPML[^2] is
+the payload function **pay**: a property graph, instead, has a partial function that,
+given a node (or an edge) can, given a property name, associate the latter with a value.
+Otherwise, most comments and examples given in [^2] for the definition apply to the
+definition here as well.
+
+Returning the example from the introductory section above, the abstract graph value is described, 
+according to this definition, as follows: 
+
+- **Nodes** = { n1, n2, n3 }
+- **Edges** = { e1, e2, e3 }
+- **ends**(e1) = (n2, n1), **ends**(e2) = (n1, n3), **ends**(e3) = (n2, n3)
+- **labels**(n1) = {"a"}, **labels**(n2) = {"a"}, **labels**(n3) = {"b"}
+- **labels**(e1) = {"x"}, **labels**(e2) = {"y"}, **labels**(e3) = {"y"}
+
+(With the **pay** function elided, as values at nodes and edges were not specifically 
+considered in the example.)
 
 
 # Drawbacks
@@ -133,7 +198,15 @@ ordinal).
 
 ## Data Model
 
-As defined, a graph's label *must* be a value, should it be allowed that a graph label can be `MISSING`?
+### Occurrences of `MISSING` within a graph
+
+In the definitions as given so far, `MISSING` is not allowed to occur within a graph
+(unless embedded within another PartiQL value occurring within a graph).
+That is, `MISSING` cannot be a label (or used instead of a label set at a node or edge)
+and `MISSING` cannot be a value at a node or edge. Philosophically, this choice comes
+from an intuition that a graph value is more akin to a struct value (which does not allow
+`MISSING` at an attribute) than to a collection (which allows `MISSING` as a member).
+However, there could be reasons to make different choices.
 
 ## Graph Construction
 
