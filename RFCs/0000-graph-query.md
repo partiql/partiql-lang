@@ -1,7 +1,6 @@
-- Start Date: (fill me in with today's date, YYYY-MM-DD)
-- PartiQL Issue (fill me in with the related PartiQL issue)
-- RFC PR: (fill me in with the PR link once PR is created)
-- RFC title: Graph Query
+- RFC-0033: Graph Query
+- Start Date: 2022-10-25
+- RFC PR: https://github.com/partiql/partiql-docs/pull/33
 
 # Summary
 [summary]: #summary
