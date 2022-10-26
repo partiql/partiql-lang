@@ -10,7 +10,7 @@ This RFC proposes how graph instances conforming to the data model defined in
 The core of the proposal is to largely follow GPML, the Graph Pattern Matching Language, 
 which is under standardization as part of ISO 9075-16: SQL/PGQ. 
 Consequently, this RFC focuses on how GPML is adapted for and incorporated into PartiQL, 
-while, for shared details, deferring to publicly available GPML information 
+while, for shared details, it defers to publicly available GPML information 
 (currently, [^gpml-paper]). 
 
 
@@ -40,7 +40,8 @@ A graph pattern _pattern_ describes a graph fragment of interest to be found in 
 graph _graph_.  Variables within the pattern are used to designate elements of the fragment 
 that are needed in the result.  
 The result of this expression is a bag of structs (a.k.a. a table), 
-with one struct per each fragment found in _graph_ that matched _pattern_, where the fields 
+with one struct (a.k.a. row) per each fragment found in _graph_ that matched _pattern_, 
+where fields 
 in the struct correspond to the variables in _pattern_.  
 
 With the result of a graph matching expression being a bag of structs, the expression 
@@ -48,12 +49,14 @@ can occur anywhere in a PartiQL query, as any other expression.  In particular,
 it can occur as a data source in a `FROM` clause of a query, which is the primary 
 intended usage.
 
+TODO? An example query. (Within FROM or independent of it?)
+
 Computation of a pattern match involves navigation around the graph, but
-all the graph navigation capabilities are limited to the scope of this computation.
+graph navigation capabilities are supported only within the scope of this computation.
 The result table that gets out does not carry any implicit info about the graph's structure, 
 it only carries the "payload" information from the matched graph elements (see RFC-0025).
-In a sense,  what is inside a MATCH expression is a separate query language, 
-distinct from PartiQL, which also has its own distinct evaluation mechanisms.
+In a sense,  what is inside a MATCH expression's pattern is a separate query language, 
+distinct from PartiQL, and this language also has its own distinct evaluation mechanisms.
 
 
 ## Relation to GPML and SQL/PGQ 
@@ -121,10 +124,93 @@ TODO: What happens to path variables?
 
 ## Grammatical details
 
-- Grammar fragments
-- A note on why the outer parentheses are needed and when they can be dropped.
-- A note on WHERE: only have PartiQL-WHERE currently, but probably need GPML-WHERE as well
-  (in addition to node/edge/path-WHERE).
+### Idealized grammar
+
+Ideally, graph pattern matching would be added to PartiQL grammar as a new production 
+to the non-terminal `<expr_query>` (which defines constructs like scalar, struct, 
+and collection literals; function calls; parenthesized SELECT-FROM-WHERE, etc.):
+
+```EBNF
+<expr_query> ::= 
+   // ...
+   |  <expr_query> 'MATCH' <graph_pattern>
+   
+<graph_pattern> ::= 
+   <selector>? <path_pattern> [',' <path_pattern>]...
+```
+where `<graph_pattern>`, as well as the non-terminals on which it depends, are defined as in GPML. 
+
+After this, the match expression would become available, as an `<expr_query>`, 
+to be used as a source in the `FROM` clause of SELECT-FROM-WHERE queries, which is defined as 
+
+````EBNF
+<from_clause> ::=  
+  FROM <from_item> [ ',' <from_item> ]...
+  
+<from_item> ::= 
+    <expr_query> [ 'AS' <id> [ AT <id> ]? ]?
+  // ... joins, etc
+````
+and, as a grammar that would not need any change. 
+
+Unfortunately, such straightforward modifications would introduce ambiguities, making it impossible
+to parse for this grammar with one-token lookahead: the new rule for `<expr_query>` 
+is left-recursive, and there could be uses of `,` for which it is impossible to decide whether 
+they separate instances of `<path_pattern`s or `<from_item>`.
+
+
+### More practical grammar
+
+To address these parsing difficulties, there are a couple tweaks to the above grammar. 
+
+First, a match expression, in general, must be parenthesised. That is, `<expr_query>` 
+is extended as 
+
+```EBNF
+<expr_query> ::=
+  // ...
+   |  '(' <expr_query> 'MATCH' <graph_pattern> ')'
+   
+<graph_pattern> ::= 
+   <selector>? <path_pattern> [',' <path_pattern>]...
+```
+
+Second, the parenthesation restriction is relaxed in a `FROM` clause: when 
+a match expression is used as a source of data _and_ its pattern consists of a 
+single path pattern, then the parentheses are not necessary: 
+
+```EBNF
+<from_clause> ::=  
+  FROM <from_item> [ ',' <from_item> ]...
+  
+<from_item> ::= 
+    <expr_query> [ 'AS' <id> [ AT <id> ]? ]?
+  | <expr_query> 'MATCH' <selector>? <path_pattern> [ 'AS' <id> [ AT <id> ]? ]?
+  // ... joins, etc
+````
+
+### On MATCH-WHERE clause
+
+In a few places, [^gpml-paper] mentions `WHERE` clause -- sometimes referred to as 
+a "postfilter" -- that is not a part of any node, edge, or path fragment of a pattern, 
+but rather applies to the entirety of the pattern in a graph match expression. 
+From the limited discussion in the paper and the lack of examples on the matter, 
+it is not clear whether such `WHERE` is meant to be the `WHERE` of the "host" 
+select-from-where query (in SQL or PartiQL) or it is a new kind of `WHERE` 
+that is coupled with `MATCH`. 
+
+In the case of the latter, the syntax of graph match expression woulf have to accommodate 
+this possibility:
+```EBNF
+<expr_query> ::=
+  // ...
+   |  '(' <expr_query> 'MATCH' <graph_pattern> [ 'WHERE' <expr_query> ]?  ')'
+```
+
+Currently, this is not being proposed for the reasons of economy, 
+until and unless it becomes clear that the "host" `WHERE` 
+cannot support necessary use cases.
+
 
 ## Implementation-dependent aspects
 
