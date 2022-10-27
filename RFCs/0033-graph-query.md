@@ -13,6 +13,10 @@ Consequently, this RFC focuses on how GPML is adapted for and incorporated into 
 while, for shared details, it defers to publicly available GPML information 
 (currently, [^gpml-paper]). 
 
+Familiarity with [^gpml-paper] is required for understanding the _full impact_ 
+of this RFC on PartiQL, 
+however this RFC is meant to be self-contained (in conjunction with RFC-0025).
+
 
 # Motivation
 [motivation]: #motivation
@@ -61,24 +65,37 @@ distinct from PartiQL, and this language also has its own distinct evaluation me
 
 ## Relation to GPML and SQL/PGQ 
 
-<!-- Better in RFC-0025 ? -->
 GPML is the name given to the graph pattern matching language described in a 
 publicly available paper [^gpml-paper] that previews such a language developed for 
 SQL/PGQ and GQL, the upcoming standards from ISO and IEC. 
+SQL/PGQ is ISO 9075-16 -- a new section in the SQL standard ISO 9075 that adds to SQL ability to 
+query graphs and, presumably, those will be graphs defined as "views" over relational tables, 
+according to conventions to be described in ISO 9075-16 as well. 
+GQL will be a language for "native" graph databases, with full CRUD capabilities for graphs.
+Graph queries by means of graph patterns will be a capability 
+shared between SQL/PGQ and GQL, and that is what is referred to as GPML.  
 
-- GPML
-  - TODO: what it is
-  - GPML is for a more concrete data model (RFC-0025 is more general: allows any PartiQL value 
-    as a payload at a graph element, not just something that mimics GPML's key/value properties).
-  -  `MATCH pat` -- the graph is implicit, vs `(graph MATCH pat)` -- the input graph is explicit.
-- SQL/PGQ
-  - TODO: what it is
-  - This RFC describes for PartiQL what SQL/PGQ is expected to describe for SQL: 
-    describe GPML (by reference or by inclusion) and specify how it is integrated 
-    into the host language.
-  - There is no detailed public information available at the moment about SQL/PGQ. 
-    Consequently, the proposal in this RFC may need adjustments (more likely in syntax,
-    but possibly in semantics as well) after SQL/PGQ becomes available.
+This RFC intends to describe for PartiQL parts of what SQL/PGQ is meant 
+to describe for SQL: a graph pattern language and how it is integrated into 
+the host language (PartiQL or SQL).  
+In general, PartiQL strives for SQL compatibility.
+While [^gpml-paper] provides good amount of detail about the pattern language, 
+the details of its integration into SQL are less clear.
+Consequently, the proposal in this RFC may need adjustments (more likely in syntax,
+but possibly in semantics as well) after SQL/PGQ becomes available.
+
+Graph pattern language for PartiQL described in this RFC largely follows GPML 
+as descibed in [^gpml-paper], with two differences:
+
+- Since the graph data model in RFC-0025 is more general than in GPML
+  (it allows any PartiQL value as a payload at a graph element, not just something 
+  that mimics GPML's key/value properties), this has to be addressed for the relevant 
+  aspects of the pattern language.
+
+- In GPML, at least as described in [^gpml-paper], graph queries have form
+  `MATCH` _pattern_, where the graph being queried is implicit, 
+  while here graph match expression has form
+  `(` _graph_ `MATCH` _pattern_ `)`, where the graph is explicit. 
 
 
 ## Internal semantics of graph pattern match
