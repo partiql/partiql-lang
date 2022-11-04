@@ -98,151 +98,6 @@ as descibed in [^gpml-paper], with two differences:
   `(` _graph_ `MATCH` _pattern_ `)`, where the graph is explicit. 
 
 
-## Evaluation semantics
-
-### Background: evaluation in GPML
-
-The details of graph pattern matching semantics are available in [^gpml-paper] (Section 6).
-For the purposes of this RFC, it is sufficient to describe the structure of a 
-pattern-matching result. 
-
-Suppose we have a GPML graph pattern of the form
->  _P<sub>1</sub>_ *,* _..._ *,* _P<sub>n</sub>_
-
-where _P<sub>i</sub>_ are path patterns. 
-(We abstract away from the possibility that a `<graph_pattern>` can start with a selector, 
-since that does not affect the structure of the result.)
-The path patterns can contain variables marking node, edge, or path subpatterns. 
-The variables that occur in the scope of a quantifier 
-(such as `+`, `*`, `{2,7}`, or `{2,}`) are _group variables_, 
-while the remaining ones are _singleton variables_.
-
-The intent of pattern matching is to find all (possibly overlapping) fragments 
-of the graph, each of which is described by the pattern, and associate 
-the pattern's variables with elements of the graph from the fragment. 
-In a given match result (fragment), a singleton variable gets associated to 
-one graph element, while a group variable can get associated to none or several 
-elements -- one for each repetition of the containing quantified subpattern.  
-A singleton variable `x` for a node or an edge can occur in more than one 
-path pattern _P<sub>i</sub>_, in which case it is meant to be bound,
-in a given result, to the same node or edge across all path patterns.
-For the sanity of this semantics it follows that this is not
-allowed for group variables.
-
-
-Inferring from [^gpml-paper] (Section 6), the result of evaluating a GPML pattern 
-on a graph can be characterized as 
-a bag of matching graph fragments, each being an ordered tuple of the form
->  _p<sub>1</sub>_ *,* ...*,* _p<sub>n</sub>_
-
-with each _p<sub>i</sub>_ being an annotated path from the graph corresponding 
-to the path pattern _P<sub>i</sub>_.
-In turn, an annotated path is a path from the graph
-(a sequence of alternating nodes and edges that can start and end with either
-a node or an edge) 
-that is annotated with variables from the corresponding pattern. 
-Among these annotations, 
-- A singleton variable can be used multiple times, possibly in different
-  paths _p<sub>i</sub>_ and _p<sub>j</sub>_, but always on the same node or edge, 
-  in a given matching fragment. 
-- A group variable annotates zero or more elements within one of the
-  _p<sub>i</sub>_ paths in the match.
-- A path variable annotates a contiguous subpath of one of the
-  _p<sub>i</sub>_ paths (which could be the entirety of _p<sub>i</sub>_).
-
-It is important to note that the variables are annotated to entities 
-in the graph (nodes, edges, paths) that are "aware" of their identity
-and location within the graph.  This capability is available in the 
-result, and it is also used within the pattern matching process, for 
-- determining sameness of nodes and edges that are probed for 
-  being annotated with the same (singleton) pattern variable; 
-- computing values of graph predicates
-  _e_ `IS DIRECTED`, _n_ `IS SOURCE OF` _e_, _n_ `IS DESTINATION OF` _e_,
-  `SAME(`_x1_`,` _e2_`,` ...`)`,  `ALL_DIFFERENT(`_x1_`,` _x2_`,` ...`)`.
-
-
-### Evaluation of graph pattern matching in PartiQL
-
-In the context of this RFC, the notion of a PartiQL value has been extended, 
-according to RFC-0025, to include graph values, while the notion of an expression 
-is being extended by adding graph matching expressions.
-Furthermore, a graph matching expression can contain PartiQL expressions, 
-notably within filtering `WHERE` clauses.
-They, in turn, can contain graph-specific predicates like `IS DIRECTED` and
-`ALL_DIFFERENT`.
-
-A PartiQL expression is evaluated in an environment that maps variables to PartiQL values,
-with the result of an evaluation being a PartiQL value.  
-The above-outlined evaluation semantics of graph pattern matching in GPML is 
-structured differently (for one, it produces a bag of tuples of annotated paths) 
-and operates over values of a kind that are not part
-of PartiQL data model, even after the extension (such as nodes and edges 
-that have awareness of their identity and location within a graph).
-In a sense, graph matching is a distinct query language of its own, embedded 
-within PartiQL as a `MATCH` expression form.  
-
-Consequently, our goal here is to describe how the two semantics are combined, 
-specifically addressing: 
-- Role of PartiQL environments while evaluating pattern matching.
-- Evaluation of PartiQL expressions within graph `WHERE` clauses.
-- And, crucially, how the result of pattern match computation is 
-  represented as a value within the PartiQL data model. 
-
-
-For evaluating a  graph matching expression
->    `(` _graph_ `MATCH` _pattern_ `)`
-
-this RFC  proposes the following. 
-
-- As any PartiQL expression, the graph matching expression 
-  is evaluated within a regular PartiQL environment (𝝆<sub>0</sub>, 𝝆) that maps variables 
-  (defined outside this expression) to values. 
-
-- The _graph_ subexpression is evaluated within (𝝆<sub>0</sub>, 𝝆) and must result
-  in a graph value.
-
-- Given the graph value, graph matching computation for _pattern_ proceeds according
-  to the GPML semantics, with the following modifications:
-
-  - Variables defined in _pattern_ shadow variables bound in (𝝆<sub>0</sub>, 𝝆).
-
-  - Whenever a `WHERE e` clause within the pattern needs to be evaluated, 
-    the clause's expression `e` is evaluated within (𝝆<sub>0</sub>, 𝝆) 
-    though regular PartiQL evaluation, except that any pattern-defined
-    variable `x` is not looked up in (𝝆<sub>0</sub>, 𝝆).
-    Instead, its value, as a graph element, is provided by the GPML 
-    pattern matching procedure.  
-    The subsequent processing of the graph-element value depends on the 
-    context of `x`: 
-    - If `x` is used within a graph-specific construct (such as a predicate 
-      like `IS DIRECTED` or a path-aggregating function), the graph-element
-      value is passed to this construct directly. 
-    - Otherwise, `x` is used as a regular PartiQL value.
-      - If `x` is bound to a node or an edge, the payload value of the latter 
-        is used. 
-      - If `x` is bound to a path, it is an error.
-
-- Upon completion of the GPML pattern matching computation, the resulting
-  bag of matching graph fragments is converted into a bag of structs 
-  by converting each fragment into a struct as follows.  
-  Given a fragment of the form
-  >  _p<sub>1</sub>_ *,* ...*,* _p<sub>n</sub>_
-
-  where _p<sub>i</sub>_ are variable-annotated paths, 
-  the resulting struct gets key/value attribute pairs where keys are variable names
-  while the attribute pair for variable `x` is determined is follows. 
-
-  - If the `x` is a singleton variable that annotates a node or an edge, 
-    the value of its attribute is the payload value at the node or edge. 
-  - If `x` is a group variable, the value of its attribute is 
-    the list of payloads at the elements (nodes or edges) annotated with `x`, 
-    taken in the order of their appearance in the fragment's path.
-
-  - If `x` is a path variable, it does not produce an attribute in the struct, 
-    according to this RFC.
-
-    
-
 ## Grammatical details
 
 ### Idealized grammar
@@ -423,6 +278,150 @@ this possibility with a grammar production like
 Currently, this is not being proposed for the reasons of economy of design -- 
 until and unless it becomes certain that the "host" `WHERE` 
 cannot support necessary use cases.
+
+
+## Evaluation semantics
+
+### Background: evaluation in GPML
+
+The details of graph pattern matching semantics are available in [^gpml-paper] (Section 6).
+For the purposes of this RFC, it is sufficient to describe the structure of a
+pattern-matching result.
+
+Suppose we have a GPML graph pattern of the form
+>  _P<sub>1</sub>_ *,* _..._ *,* _P<sub>n</sub>_
+
+where _P<sub>i</sub>_ are path patterns.
+(We abstract away from the possibility that a `<graph_pattern>` can start with a selector,
+since that does not affect the structure of the result.)
+The path patterns can contain variables marking node, edge, or path subpatterns.
+The variables that occur in the scope of a quantifier
+(such as `+`, `*`, `{2,7}`, or `{2,}`) are _group variables_,
+while the remaining ones are _singleton variables_.
+
+The intent of pattern matching is to find all (possibly overlapping) fragments
+of the graph, each of which is described by the pattern, and associate
+the pattern's variables with elements of the graph from the fragment.
+In a given match result (fragment), a singleton variable gets associated to
+one graph element, while a group variable can get associated to none or several
+elements -- one for each repetition of the containing quantified subpattern.  
+A singleton variable `x` for a node or an edge can occur in more than one
+path pattern _P<sub>i</sub>_, in which case it is meant to be bound,
+in a given result, to the same node or edge across all path patterns.
+For the sanity of this semantics it follows that this is not
+allowed for group variables.
+
+
+Inferring from [^gpml-paper] (Section 6), the result of evaluating a GPML pattern
+on a graph can be characterized as
+a bag of matching graph fragments, each being an ordered tuple of the form
+>  _p<sub>1</sub>_ *,* ...*,* _p<sub>n</sub>_
+
+with each _p<sub>i</sub>_ being an annotated path from the graph corresponding
+to the path pattern _P<sub>i</sub>_.
+In turn, an annotated path is a path from the graph
+(a sequence of alternating nodes and edges that can start and end with either
+a node or an edge)
+that is annotated with variables from the corresponding pattern.
+Among these annotations,
+- A singleton variable can be used multiple times, possibly in different
+  paths _p<sub>i</sub>_ and _p<sub>j</sub>_, but always on the same node or edge,
+  in a given matching fragment.
+- A group variable annotates zero or more elements within one of the
+  _p<sub>i</sub>_ paths in the match.
+- A path variable annotates a contiguous subpath of one of the
+  _p<sub>i</sub>_ paths (which could be the entirety of _p<sub>i</sub>_).
+
+It is important to note that the variables are annotated to entities
+in the graph (nodes, edges, paths) that are "aware" of their identity
+and location within the graph.  This capability is available in the
+result, and it is also used within the pattern matching process, for
+- determining sameness of nodes and edges that are probed for
+  being annotated with the same (singleton) pattern variable;
+- computing values of graph predicates
+  _e_ `IS DIRECTED`, _n_ `IS SOURCE OF` _e_, _n_ `IS DESTINATION OF` _e_,
+  `SAME(`_x1_`,` _e2_`,` ...`)`,  `ALL_DIFFERENT(`_x1_`,` _x2_`,` ...`)`.
+
+
+### Evaluation of graph pattern matching in PartiQL
+
+In the context of this RFC, the notion of a PartiQL value has been extended,
+according to RFC-0025, to include graph values, while the notion of an expression
+is being extended by adding graph matching expressions.
+Furthermore, a graph matching expression can contain PartiQL expressions,
+notably within filtering `WHERE` clauses.
+They, in turn, can contain graph-specific predicates like `IS DIRECTED` and
+`ALL_DIFFERENT`.
+
+A PartiQL expression is evaluated in an environment that maps variables to PartiQL values,
+with the result of an evaluation being a PartiQL value.  
+The above-outlined evaluation semantics of graph pattern matching in GPML is
+structured differently (for one, it produces a bag of tuples of annotated paths)
+and operates over values of a kind that are not part
+of PartiQL data model, even after the extension (such as nodes and edges
+that have awareness of their identity and location within a graph).
+In a sense, graph matching is a distinct query language of its own, embedded
+within PartiQL as a `MATCH` expression form.
+
+Consequently, our goal here is to describe how the two semantics are combined,
+specifically addressing:
+- Role of PartiQL environments while evaluating pattern matching.
+- Evaluation of PartiQL expressions within graph `WHERE` clauses.
+- And, crucially, how the result of pattern match computation is
+  represented as a value within the PartiQL data model.
+
+
+For evaluating a  graph matching expression
+>    `(` _graph_ `MATCH` _pattern_ `)`
+
+this RFC  proposes the following.
+
+- As any PartiQL expression, the graph matching expression
+  is evaluated within a regular PartiQL environment (𝝆<sub>0</sub>, 𝝆) that maps variables
+  (defined outside this expression) to values.
+
+- The _graph_ subexpression is evaluated within (𝝆<sub>0</sub>, 𝝆) and must result
+  in a graph value.
+
+- Given the graph value, graph matching computation for _pattern_ proceeds according
+  to the GPML semantics, with the following modifications:
+
+  - Variables defined in _pattern_ shadow variables bound in (𝝆<sub>0</sub>, 𝝆).
+
+  - Whenever a `WHERE e` clause within the pattern needs to be evaluated,
+    the clause's expression `e` is evaluated within (𝝆<sub>0</sub>, 𝝆)
+    though regular PartiQL evaluation, except that any pattern-defined
+    variable `x` is not looked up in (𝝆<sub>0</sub>, 𝝆).
+    Instead, its value, as a graph element, is provided by the GPML
+    pattern matching procedure.  
+    The subsequent processing of the graph-element value depends on the
+    context of `x`:
+    - If `x` is used within a graph-specific construct (such as a predicate
+      like `IS DIRECTED` or a path-aggregating function), the graph-element
+      value is passed to this construct directly.
+    - Otherwise, `x` is used as a regular PartiQL value.
+      - If `x` is bound to a node or an edge, the payload value of the latter
+        is used.
+      - If `x` is bound to a path, it is an error.
+
+- Upon completion of the GPML pattern matching computation, the resulting
+  bag of matching graph fragments is converted into a bag of structs
+  by converting each fragment into a struct as follows.  
+  Given a fragment of the form
+  >  _p<sub>1</sub>_ *,* ...*,* _p<sub>n</sub>_
+
+  where _p<sub>i</sub>_ are variable-annotated paths,
+  the resulting struct gets key/value attribute pairs where keys are variable names
+  while the attribute pair for variable `x` is determined is follows.
+
+  - If the `x` is a singleton variable that annotates a node or an edge,
+    the value of its attribute is the payload value at the node or edge.
+  - If `x` is a group variable, the value of its attribute is
+    the list of payloads at the elements (nodes or edges) annotated with `x`,
+    taken in the order of their appearance in the fragment's path.
+
+  - If `x` is a path variable, it does not produce an attribute in the struct,
+    according to this RFC.
 
 
 ## Implementation-dependent aspects
