@@ -426,91 +426,60 @@ this RFC  proposes the following.
 
 ## Implementation-dependent aspects
 
-- Implementation-dependent choice (or config modes) for:
-  DIFFERENT NODES / DIFFERENT ELEMENTS ; TRAIL / ACYCLIC
-  - [Or have this in the "Internal semantics" section?] 
+Certain aspects of graph pattern matching behavior can be implementation-dependent. 
+This section identifies such aspects, as well as possibilities that an implementation 
+may choose to adopt for a given aspect. The chosen possibility must be clearly documented. 
+An implementation may also support several of the designated possibilities. 
+In this case, it must provide a configuration mechanism for a user to choose 
+the desired one.
+
+### Global restrictors for graph patterns
+
+A path subpattern in a graph pattern can be marked with a `TRAIL` or `ACYCLIC`
+restrictor (also `SIMPLE`) that restricts the result bag of otherwise-matching paths
+to those that additionally do not repeat an edge (for `TRAIL`) 
+or do not repeat a node (for `ACYCLIC`). 
+
+It is conceivable to have similar restrictors that apply to the whole graph pattern, 
+but it appears this is not the design in GPML and SQL/PGQ.  
+Instead, PartiQL defines this as an implementation-dependent behavior. 
+That is, dependent on an application's choice, the bag of annotated graph fragments
+computed as matches for any graph pattern is allowed to contain only certain fragments:
+ - **repeats ok**: any matching fragment is allowed;
+ - **no repeat nodes** a fragment is allowed only if no node occurs twice; 
+ - **no repeat edges** a fragment is allowed only if no edge occurs twice;
+ - **no repeat elements** a fragment is allowed only neither an edge nor a node occurs twice. 
+
+Note that these modes, when enabled, can render relevant path restrictors 
+(`TRAIL`, `ACYCLIC`, `SIMPLE`) unnecessary.
 
 
 # Drawbacks
 [drawbacks]: #drawbacks
 
-~~Why should we *not* do this?~~
-
-- It is a very sizable extension of the data model and the language.
-  The size is on the order of magnitude of what is there in PartiQL already. 
-  - Specification and reference implementation effort (PartiQL team).
-  - Implementation effort in a host system (customer teams).
-    - That is, not everyone might want to implement this. 
-      This might make more acute the need for defining PartiQL subsets/profiles
-      and supporting them in the reference implementations. 
-
-
-
-# Rationale and alternatives
-[rationale-and-alternatives]: #rationale-and-alternatives
-
-- ~~Why is this design/proposal the best in the space of possible designs?~~
-- ~~Which other designs/proposals have been considered, and what is the rationale for not choosing them?~~
-- ~~What is the impact of not doing this?~~
-
-- MATCH expression (here) vs MATCH source in a FROM clause.
-
-- GRAPH_TABLE, seen in some public slideware about GQL. 
-
-- Bidings for path variables in structs produced by a MATCH expression.
-  TODO: What happens to path variables?
-  - They do not have "natural" data payload.
-  - Probably the only way a path variable can transpire in the final table is as
-    a grouping mechanism for (data payloads of) other
-    variables occurring inside the path.
-  - [^gpml-paper] indicates that a path can be aggregated over, but the only example
-    is where the aggregate (path length) is used in a comparison in a MATCH WHERE clause.
-    Conceivably, they aggregate could be wanted in the output as well,
-    but [^gpml-paper] does not discuss a mechanism for that.
+This will be a sizable extension of the data model and the language.
+It will require substantial specification and implementation effort
+(smaller, but on the order of magnitude of what is already in PartiQL).  
+It is possible that some implementations of PartiQL might not be willing 
+to take on this effort.  This might make more acute the need for 
+some sort of a mechanism for PartiQL subsets or profiles 
+and for dealing with subsequent complexities in both specification and 
+reference/toolkit implementation of the language.
 
 
 # Prior art
 [prior-art]: #prior-art
 
-~~Discuss prior art, both the good and the bad, in relation to this proposal.
-A few examples of what this can include are:~~
+Section 3 in [^gpml-paper] contains an informative overview of modern query languages 
+with graph matching.
 
-- ~~For specification proposals: Does this feature exist in any ISO SQL standard or other SQL dialects?~~
-- ~~For API changes: Do similar APIs exist in libraries such as Calcite? What are some details of the specific implementation?~~
-- ~~Papers: Are there any published papers or great posts that discuss this? If you have some relevant papers to refer to, this can serve as a more detailed theoretical background.~~
-
-~~This section is intended to encourage you, as an author, to think about the lessons from other SQL dialects; provide readers of your RFC with a fuller picture.
-If there is no prior art, that is fine - your ideas are interesting to us whether they are brand new or if it is an adaptation from other dialects and implementations.~~
-
-~~Note that while precedent set by other dialects and libraries is some motivation, it does not on its own motivate an RFC.~~
-
-- See Section 3 in [^gpml-paper]
-
-# Unresolved questions
-[unresolved-questions]: #unresolved-questions
-
-- GPML-WHERE vs SQL-WHERE.
-  - aka Should we have (graph MATCH pattern WHERE ...) as the expression form? 
-  - The IS_DIRECTED, SAME (etc.) predicates would often make sense only in a WHERE clause,
-    but to work there, the variables involved must be bound to graph elements, not merely to their content,
-    so we seem to need a variant of WHERE clause that is part of MATCH, distinct from the PartiQL/SQL MATCH!
-
-- Syntactic delineation of the graph match expression. 
-  - The current syntax requires parentheses around the expression, almost everywhere.  
-    This is unusual - there is no other prior construct like that.
-  - GRAPH_TABLE(...) might be the approach in SQL/PGQ.
-
-- "Locational" information: should it seep into the rest of PartiQL semantics? 
-  - Might be already necessary in order to evaluate PartiQL expressions embedded within patterns. 
-  - Could be useful for the semantics of updates (not only in graphs, 
-    but in "regular" PartiQL data).
-
-- ~~What parts of the design do you expect to resolve through the RFC process before this gets merged?~~
-- ~~What parts of the design do you expect to resolve through the implementation of this feature before stabilization?~~
-- ~~What related issues do you consider out of scope for this RFC that could be addressed in the future independently of the solution that comes out of this RFC?~~
 
 # Future possibilities
 [future-possibilities]: #future-possibilities
+
+Further improvements of graph support in PartiQL can be
+- Syntax for literal graph values.
+- Create, update, and delete functionality within a graph.
 
 # References
 [references]: #references
