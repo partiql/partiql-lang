@@ -484,4 +484,8 @@ Further improvements of graph support in PartiQL can be
 # References
 [references]: #references
 
-[^gpml-paper]: [Graph Pattern Matching in GQL and SQL/PGQ](https://arxiv.org/pdf/2112.06217.pdf)
+[^gpml-paper]: Alin Deutsch et al., 
+  [Graph Pattern Matching in GQL and SQL/PGQ]( https://doi.org/10.1145/3514221.3526057).
+  SIGMOD'22: Proceedings of the 2022 International Conference on Management of Data,
+  June 2022, pp. 2246–2258.
+  [PDF](https://arxiv.org/pdf/2112.06217.pdf)
