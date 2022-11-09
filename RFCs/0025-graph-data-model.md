@@ -110,9 +110,9 @@ Consequently, graph values can occur as members of structs, bags, and lists.
 
 ## Graph data model
 
-For the graph values themselves, rather than giving a grammar -- as PartiQL specification does for
-other values -- we will define an abstract data model, largely following the one for PGML[^2].
-One of the reasons is that a concrete syntax for graph literals could emerge from ISO/IEC
+For graph values themselves, rather than giving a grammar--as the PartiQL specification does for
+other values--we will define an abstract data model, largely following the one for GPML[^2].
+We do this because a concrete syntax for graph literals could emerge from ISO/IEC
 standardization, possibly as part of GQL, but no public information is yet available about
 that effort.  When appropriate, graph literals in PartiQL would be covered in a separate RFC.
 
