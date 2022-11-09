@@ -311,13 +311,10 @@ Among these annotations,
 
 It is important to note that the variables are annotated to entities
 in the graph (nodes, edges, paths) that are "aware" of their identity
-and location within the graph.  This capability is available in the
-result, and it is also used within the pattern matching process, for
-- determining sameness of nodes and edges that are probed for
-  being annotated with the same (singleton) pattern variable;
-- computing values of graph predicates such as
-  _e_ `IS DIRECTED`, _n_ `IS SOURCE OF` _e_, _n_ `IS DESTINATION OF` _e_,
-  `SAME(`_x1_`,` _e2_`,` ...`)`,  `ALL_DIFFERENT(`_x1_`,` _x2_`,` ...`)`.
+and location within the graph.  This capability is 
+essential within the pattern matching process, 
+to determine sameness of nodes and edges when they are probed for 
+being annotated with the same (singleton) pattern variable.
 
 
 ### Evaluation of Graph Pattern Matching in PartiQL
@@ -326,16 +323,16 @@ In the context of this RFC, the notion of a PartiQL value has been extended,
 according to RFC-0025, to include graph values, while the notion of an expression
 is being extended in this RFC by adding graph matching expressions.
 Furthermore, a graph matching expression can contain PartiQL expressions,
-notably within filtering `WHERE` clauses.
-They, in turn, can contain graph-specific predicates like `IS DIRECTED` and
-`ALL_DIFFERENT`.
+notably within the filtering `WHERE` clauses.
+<!-- They, in turn, can contain graph-specific predicates like `IS DIRECTED` and
+`ALL_DIFFERENT`.  -->
 
 A PartiQL expression is evaluated in an environment that maps variables to PartiQL values,
 with the result of an evaluation being a PartiQL value.  
 The above-outlined evaluation semantics of graph pattern matching in GPML is
 structured differently (for one, it produces a bag of tuples of annotated paths)
 and operates over values of a kind that are not part
-of PartiQL data model, even after the extension (such as nodes and edges
+of PartiQL data model, even after the RFC-0025 extension (such as nodes and edges
 that have awareness of their identity and location within a graph).
 In a sense, graph matching is a distinct query language of its own, embedded
 within PartiQL as a `MATCH` expression form.
@@ -371,8 +368,15 @@ this RFC  proposes the following.
     variable `x` is not looked up in (𝝆<sub>0</sub>, 𝝆).
     Instead, its value, as a graph element _v_, is provided by the GPML
     pattern matching procedure.  
+    To make the evaluation proceed further, 
+    according to regular PartiQL evaluation rules, _v_ is 
+    replaced with its payload: 
+    - If _v_ is a node or an edge, **payload(**_v_**)** is used.
+    - If _v_ is a path, it is an error, according to this RFC.
+<!-- To support graphical predicates, it would be something like this, 
+     instead of the above paragraph:
     The subsequent processing of the graph-element value _v_ depends on the
-    context of `x`:
+    context of `x` within `e`:
     - If `x` is used within a graph-specific construct (such as a predicate
       like `IS DIRECTED` or a path-aggregating function), the graph-element
       value _v_ is passed to this construct directly.
@@ -380,6 +384,7 @@ this RFC  proposes the following.
       replaced with its payload:
       - If _v_ is a node or an edge, **payload(**_v_**)** is used.
       - If _v_ is a path, it is an error, according to this RFC.
+-->
 
 - Upon completion of the GPML pattern matching computation, the resulting
   bag of matching graph fragments is converted into a bag of structs
@@ -389,7 +394,7 @@ this RFC  proposes the following.
 
   where _p<sub>i</sub>_ are variable-annotated paths,
   the resulting struct gets key/value attribute pairs where keys are variable names
-  while the attribute value for variable `x` is determined is follows.
+  while the overall attribute for variable `x` is determined is follows.
 
   - If the `x` is a singleton variable that annotates a node or an edge _v_,
     the value of its `x`'s attribute is **payload(**_v_**)**.
@@ -399,6 +404,15 @@ this RFC  proposes the following.
 
   - If `x` is a path variable, it does not produce an attribute in the struct,
     according to this RFC.
+
+This semantics naturally supports the important property lookup use case 
+from GPML[^gpml-paper] on property graphs. That is, evaluating an expression 
+of the form _v_**.a** where _v_ is a node or an edge and **a** is a property name: 
+- In GPML[^gpml-paper], **.a** is a property lookup operation 
+  specifically defined for graph nodes and edges. 
+- In PartiQL, **.a** remains the operation of a key lookup in a struct, 
+  which would succeed under the above semantics 
+  as long as _v_ has a struct as its payload.
 
 
 ## Implementation-Dependent Aspects
@@ -431,10 +445,6 @@ Note that these modes, when enabled, can render relevant path restrictors
 (`TRAIL`, `ACYCLIC`, `SIMPLE`) unnecessary.
 
 
-# Rationale and alternatives
-[rationale-and-alternatives]: #rationale-and-alternatives
-
-
 # Prior Art
 [prior-art]: #prior-art
 
@@ -445,7 +455,7 @@ with graph matching.
 # Unresolved questions
 [unresolved-questions]: #unresolved-questions
 
-### On WHERE Within MATCH
+### MATCH-Associated WHERE
 
 The pattern grammar proposed in this RFC supports a variant of `WHERE` clause within 
 node, edge, and path (grouping) patterns. 
@@ -469,6 +479,48 @@ this possibility with a grammar production like
 Currently, this is not being proposed for the reasons of economy of design --
 until and unless it becomes certain that the "host" `WHERE`
 cannot support necessary use cases.
+
+
+### Graphical Predicates and First-Class Nodes/Edges 
+
+GPML[^gpml-paper] supports several _graphical predicates_, such as
+_e_ `IS DIRECTED`, _n_ `IS SOURCE OF` _e_, _n_ `IS DESTINATION OF` _e_,
+`SAME(`_v1_`,` _v2_`,` ...`)`,  `ALL_DIFFERENT(`_v1_`,` _v2_`,` ...`)`,
+which can be used in `WHERE` filters associated with nodes, edges, and paths (groupings), 
+as well as, presumably, in the post-filter `WHERE` associated with the overall pattern
+(see the previous section). 
+
+Evaluation of these predicates, naturally, requires that nodes _n_ and edges _e_ 
+to which they are applied are entities that are "aware" of their location within
+a graph _G_ to which they belong.  
+In particular, the values _n_ and _e_ cannot be merely the payloads 
+taken from nodes and edges of _G_. 
+
+Since the semantics proposed in this RFC equates graph elements with their payloads
+for all purposes except the internal mechanics of pattern matching computation,
+this RFC does not specify support for the graphical predicates.  
+
+Properly supporting them would require modeling values of nodes and edges 
+as something like _in-graph references_ of the form (_id_, _G_) or similar
+and, if we are to support property lookups _v_**.a** as naturally as possible so far, 
+introducing rules on when an in-graph reference is treated as itself vs. 
+when it is reduced to its payload.
+
+Then, an important question would be whether these in-graph references were to become
+first-class values in PartiQL or be limited to the scope of `MATCH` expressions.
+- If they were to become first-class, then the post-filter `WHERE` could likely 
+  coincide with the "host" PartiQL `WHERE`.  However, this would significantly 
+  complicate the overall data model: in addition to graph values, it would 
+  be expanded with in-graph reference values, of variants specific to nodes, edges,
+  and, possibly, paths.
+  Anticipating these consequences makes it worthwhile to investigate 
+  whether such reference could be an instance of some more general construct, 
+  perhaps relevant to update operations in non-graph parts of the data model as well.
+- If they were to be limited in scope, this would give further justification
+  to adding the post-filter `WHERE` as an option to `MATCH` expressions. 
+  The non-graph PartiQL data model would remain simple, 
+  while the overall language should still be able to support all interesting use cases.
+  It seems likely this approach is being chosen for SQL/PGQ.
 
 
 # Future Possibilities
