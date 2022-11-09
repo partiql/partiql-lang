@@ -124,12 +124,12 @@ where
 
 - **Nodes** is a finite set of the *nodes* of the graph;
 - **Edges** is a finite set of the *edges* of the graph;
-- **ends** **:** **Edges** --> (**Nodes** *x* **Nodes**) union { {u,v} | u, v in **Nodes** }   
+- **ends** **:** **Edges** → (**Nodes** *x* **Nodes**) union { {u,v} | u, v in **Nodes** }   
   is a total function mapping each edge to its *endpoints*,
   which are an either ordered or an unordered pair of nodes;
-- **labels** **:** (**Nodes** union **Edges**) --> P( *string_value* )
+- **labels** **:** (**Nodes** union **Edges**) → P( *string_value* )
   is a total function that maps each node and each edge to a set of string labels;
-- **payload** **:** (**Nodes** union **Edges**) --> *partiql_value* \ {`MISSING`}
+- **payload** **:** (**Nodes** union **Edges**) → *partiql_value* \ {`MISSING`}
   is a total function that maps each node and each edge to its *payload*,
   which is a PartiQL value that cannot be `MISSING`.
 
@@ -139,12 +139,16 @@ of graph nodes and edges as uninterpreted identifiers, perhaps corresponding to 
 implementation-specific memory locations.
 
 The primary difference of this graph definition from the *property graph* in GPML[^2] is
-the **payload** function: a property graph, instead, has a partial function that,
-given a node (or an edge) can, given a property name, associate the latter with a value.
-Otherwise, most comments and examples given in [^2] for the definition apply to the
+the **payload** function.  In a GPML property graph, its analogue is the partial function   
+π **:** (**Nodes** union **Edges**) x **PropertyNames** ⇀ **Values**   
+that,
+for each node (or an edge), associates _some_ of the available property names to values. 
+This effect can be obtained with **payload** by using PartiQL structs as its values, 
+with property names keys within them.
+Consequently, most comments and examples for property graphs given in [^2] apply to the
 definition here as well.
 
-Returning the example from the introductory section above, the abstract graph value is described, 
+Returning to the example from the introductory section above, the graph value is described, 
 according to this definition, as follows: 
 
 - **Nodes** = { n1, n2, n3 }
