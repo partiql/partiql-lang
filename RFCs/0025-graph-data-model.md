@@ -30,10 +30,10 @@ Subsequent RFCs are expected for the particular syntax around graph query itself
 the model and how it would operate in PartiQL) and for the syntax for expressing or serializing/de-serializing graph data
 directly (similar to struct or bag expressions) to/from PartiQL.
 
-# Guide-level explanation
+# Guide-Level Explanation
 [guide-level-explanation]: #guide-level-explanation
 
-## Guiding intuitions
+## Guiding Intuitions
 
 To introduce the PartiQL graph data type, we can first consider the other _aggregate_ data types (i.e., those containing
 PartiQL values) such as bag, list, and struct. We can use the struct and list data types as helpful examples. The
@@ -93,7 +93,7 @@ Even though PartiQL defines a very general graph data model, it is *not required
 values at vertices or edges. This is similar to PartiQL over a relational database, where attributes of a row are
 restricted to scalars.
 
-## Addition to the PartiQL data model
+## Addition to the PartiQL Data Model
 
 As outlined above, graphs are introduced as a new category of "native" values in the PartiQL
 data model, on par with scalar literals, structs, lists, and bags:
@@ -108,7 +108,7 @@ data model, on par with scalar literals, structs, lists, and bags:
 ```
 Consequently, graph values can occur as members of structs, bags, and lists.
 
-## Graph data model
+## Graph Data Model
 
 For graph values themselves, rather than giving a grammar--as the PartiQL specification does for
 other values--we will define an abstract data model, largely following the one for GPML[^2].
@@ -118,7 +118,7 @@ that effort.  When appropriate, graph literals in PartiQL would be covered in a 
 
 A *graph* (a PartiQL *graph value*) is a tuple
 
->  < **Nodes**, **Edges**, **ends**, **labels**, **pay** >
+>  < **Nodes**, **Edges**, **ends**, **labels**, **payload** >
 
 where
 
@@ -129,17 +129,17 @@ where
   which are an either ordered or an unordered pair of nodes;
 - **labels** **:** (**Nodes** union **Edges**) --> P( *string_value* )
   is a total function that maps each node and each edge to a set of string labels;
-- **pay** **:** (**Nodes** union **Edges**) --> *partiql_value* \ {`MISSING`}
+- **payload** **:** (**Nodes** union **Edges**) --> *partiql_value* \ {`MISSING`}
   is a total function that maps each node and each edge to its *payload*,
   which is a PartiQL value that cannot be `MISSING`.
 
 The inhabitants of the sets **Nodes** and **Edges** are understood abstractly; all that is known
-about them is given by the functions **ends**, **labels**, and **pay**.  Intuitively, one can think
+about them is given by the functions **ends**, **labels**, and **payload**.  Intuitively, one can think
 of graph nodes and edges as uninterpreted identifiers, perhaps corresponding to some
 implementation-specific memory locations.
 
 The primary difference of this graph definition from the *property graph* in GPML[^2] is
-the payload function **pay**: a property graph, instead, has a partial function that,
+the **payload** function: a property graph, instead, has a partial function that,
 given a node (or an edge) can, given a property name, associate the latter with a value.
 Otherwise, most comments and examples given in [^2] for the definition apply to the
 definition here as well.
@@ -153,14 +153,22 @@ according to this definition, as follows:
 - **labels**(n1) = {"a"}, **labels**(n2) = {"a"}, **labels**(n3) = {"b"}
 - **labels**(e1) = {"x"}, **labels**(e2) = {"y"}, **labels**(e3) = {"y"}
 
-(With the **pay** function elided, as values at nodes and edges were not specifically 
+(With the **payload** function elided, as values at nodes and edges were not specifically 
 considered in the example.)
 
 
 # Drawbacks
 [drawbacks]: #drawbacks
 
-*TBD*
+This will be a sizable extension of the data model and the language.
+It will require substantial specification and implementation effort
+(smaller, but on the order of magnitude of what is already in PartiQL).  
+It is possible that some implementations of PartiQL might not be willing
+to take on this effort.  This might make more acute the need for
+some sort of a mechanism for PartiQL subsets or profiles
+and for dealing with subsequent complexities in both specification and
+reference/toolkit implementation of the language.
+
 
 # Rationale and Alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
@@ -196,9 +204,7 @@ ordinal).
 # Unresolved Questions
 [unresolved-questions]: #unresolved-questions
 
-## Data Model
-
-### Occurrences of `MISSING` within a graph
+## Occurrences of `MISSING` Within a Graph
 
 In the definitions as given so far, `MISSING` is not allowed to occur within a graph
 (unless embedded within another PartiQL value occurring within a graph).

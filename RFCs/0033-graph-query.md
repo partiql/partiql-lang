@@ -24,7 +24,7 @@ however this RFC is meant to be self-contained (in conjunction with RFC-0025).
 See RFC-0025 "Graph Data Model".
 
 
-# Guide-level explanation
+# Guide-Level Explanation
 [guide-level-explanation]: #guide-level-explanation
 
 ## Overview
@@ -98,9 +98,9 @@ as descibed in [^gpml-paper], with two differences:
   `(` _graph_ `MATCH` _pattern_ `)`, where the graph is explicit. 
 
 
-## Grammatical details
+## Grammatical Details
 
-### Idealized grammar
+### Idealized Grammar
 
 Ideally, graph pattern matching would be added to PartiQL grammar as a new production 
 to the non-terminal `<expr_query>` (which defines constructs like scalar, struct, 
@@ -135,7 +135,7 @@ is left-recursive, and there could be uses of `,` for which it is impossible to 
 they separate instances of `<path_pattern` or instances of `<from_item>`.
 
 
-### More practical grammar
+### More Practical Grammar
 
 To address these parsing difficulties, there are a couple tweaks to the above grammar. 
 
@@ -165,7 +165,7 @@ single path pattern, then the parentheses are not necessary:
     // ... joins, etc
 ````
 
-### Graph patterns
+### Graph Patterns
 
 The grammar in this section is a reverse-engineered reconstruction based on the examples 
 in [^gpml-paper]. It is followed in the current experimental implementation of 
@@ -256,7 +256,7 @@ This expession, however, can contain, as references, variables introduced as
 elsewhere in the pattern.
 
 
-### On WHERE within MATCH
+### On WHERE Within MATCH
 
 In a few places, [^gpml-paper] mentions `WHERE` clause that is not a part of any 
 node, edge, or path fragment of a pattern, 
@@ -280,9 +280,9 @@ until and unless it becomes certain that the "host" `WHERE`
 cannot support necessary use cases.
 
 
-## Evaluation semantics
+## Evaluation Semantics
 
-### Background: evaluation in GPML
+### Background: Evaluation in GPML
 
 The details of graph pattern matching semantics are available in [^gpml-paper] (Section 6).
 For the purposes of this RFC, it is sufficient to describe the structure of a
@@ -343,7 +343,7 @@ result, and it is also used within the pattern matching process, for
   `SAME(`_x1_`,` _e2_`,` ...`)`,  `ALL_DIFFERENT(`_x1_`,` _x2_`,` ...`)`.
 
 
-### Evaluation of graph pattern matching in PartiQL
+### Evaluation of Graph Pattern Matching in PartiQL
 
 In the context of this RFC, the notion of a PartiQL value has been extended,
 according to RFC-0025, to include graph values, while the notion of an expression
@@ -424,7 +424,7 @@ this RFC  proposes the following.
     according to this RFC.
 
 
-## Implementation-dependent aspects
+## Implementation-Dependent Aspects
 
 Certain aspects of graph pattern matching behavior can be implementation-dependent. 
 This section identifies such aspects, as well as possibilities that an implementation 
@@ -433,7 +433,7 @@ An implementation may also support several of the designated possibilities.
 In this case, it must provide a configuration mechanism for a user to choose 
 the desired one.
 
-### Global restrictors for graph patterns
+### Global Restrictors for Graph Patterns
 
 A path subpattern in a graph pattern can be marked with a `TRAIL` or `ACYCLIC`
 restrictor (also `SIMPLE`) that restricts the result bag of otherwise-matching paths
@@ -454,27 +454,14 @@ Note that these modes, when enabled, can render relevant path restrictors
 (`TRAIL`, `ACYCLIC`, `SIMPLE`) unnecessary.
 
 
-# Drawbacks
-[drawbacks]: #drawbacks
-
-This will be a sizable extension of the data model and the language.
-It will require substantial specification and implementation effort
-(smaller, but on the order of magnitude of what is already in PartiQL).  
-It is possible that some implementations of PartiQL might not be willing 
-to take on this effort.  This might make more acute the need for 
-some sort of a mechanism for PartiQL subsets or profiles 
-and for dealing with subsequent complexities in both specification and 
-reference/toolkit implementation of the language.
-
-
-# Prior art
+# Prior Art
 [prior-art]: #prior-art
 
 Section 3 in [^gpml-paper] contains an informative overview of modern query languages 
 with graph matching.
 
 
-# Future possibilities
+# Future Possibilities
 [future-possibilities]: #future-possibilities
 
 Further improvements of graph support in PartiQL can be
