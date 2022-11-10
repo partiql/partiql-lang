@@ -41,11 +41,11 @@ where
 - `MATCH` is a keyword, while the surrounding parentheses `(` ... `)` are required, in most cases.
 
 A graph pattern _pattern_ describes a graph fragment of interest to be found in the input 
-graph _graph_.  Variables within the pattern are used to designate elements of the fragment 
+graph _graph_.  Variables within the pattern designate elements of the fragment 
 that are needed in the result.  
 The result of this expression is a bag of structs (a.k.a. a table), 
-with one struct (a.k.a. row) per each fragment found in _graph_ that matched _pattern_, 
-where fields 
+with one struct (a.k.a. a row) per each fragment found in _graph_ that matched _pattern_, 
+where attributes 
 in the struct correspond to the variables in _pattern_.  
 
 With the result of a graph matching expression being a bag of structs, this expression 
@@ -98,49 +98,13 @@ as descibed in [^gpml-paper], with two differences:
   `(` _graph_ `MATCH` _pattern_ `)`, where the graph is explicit. 
 
 
-## Grammatical Details
+## Grammar
 
-### Idealized Grammar
+### Adding MATCH expression
 
-Ideally, graph pattern matching would be added to PartiQL grammar as a new production 
-to the non-terminal `<expr_query>` (which defines constructs like scalar, struct, 
+Graph pattern matching is added to the PartiQL grammar as a new production
+for the non-terminal `<expr_query>` (which defines constructs like scalar, struct,
 and collection literals; function calls; parenthesized SELECT-FROM-WHERE, etc.):
-
-```EBNF
-<expr_query> ::= 
-   // ...
-   |  <expr_query> 'MATCH' <graph_pattern>
-   
-<graph_pattern> ::= 
-   <selector>? <path_pattern> [',' <path_pattern>]*
-```
-where `<graph_pattern>`, as well as the non-terminals on which it depends, are defined as in GPML. 
-
-After this, the match expression would become available, as an `<expr_query>`, 
-to be used as a source in the `FROM` clause of SELECT-FROM-WHERE queries, which is defined as 
-
-````EBNF
-<from_clause> ::=  
-      'FROM' <from_item> [ ',' <from_item> ]*
-  
-<from_item> ::= 
-      <expr_query> [ 'AS' <id> [ AT <id> ]? ]?
-    // ... joins, etc
-````
-and, as a grammar, that would not need any change. 
-
-Unfortunately, such straightforward modifications would introduce ambiguities, making it impossible
-to parse for this grammar with one-token lookahead: the new rule for `<expr_query>` 
-is left-recursive, and there could be uses of `,` for which it is impossible to decide whether 
-they separate instances of `<path_pattern` or instances of `<from_item>`.
-
-
-### More Practical Grammar
-
-To address these parsing difficulties, there are a couple tweaks to the above grammar. 
-
-First, a match expression, in general, must be parenthesised. That is, `<expr_query>` 
-is extended as 
 
 ```EBNF
 <expr_query> ::=
@@ -150,19 +114,39 @@ is extended as
 <graph_pattern> ::= 
     <selector>? <path_pattern> [ ',' <path_pattern> ]*
 ```
+where `<graph_pattern>`, as well as the non-terminals on which it depends, 
+are defined as in GPML (see the following section).
 
-Second, the parenthesation restriction is relaxed in a `FROM` clause: when 
-a match expression is used as a source of data _and_ its pattern consists of a 
-single path pattern, then the parentheses are not necessary: 
+After this, the match expression becomes available, as an `<expr_query>`,
+to be used as a source in the `FROM` clause of SELECT-FROM-WHERE queries, 
+which is defined in PartiQL as
+
+````EBNF
+<from_clause> ::=  
+      'FROM' <from_item> [ ',' <from_item> ]*
+  
+<from_item> ::= 
+      <expr_query> [ 'AS' <id> [ AT <id> ]? ]?
+    // ... joins, etc
+````
+
+Note that there are mandatory parentheses `(` ... `)` around the `MATCH` expression. 
+These are necessary for parsing `FROM` clauses with one-token lookahead. 
+Otherwise, there could be uses of `,` in a `FROM` clause for which it would be 
+impossible to decide whether they separate instances of `<path_pattern>` 
+or instances of `<from_item>`.
+
+However, the parenthesation restriction can be relaxed in a `FROM` clause
+when its pattern consists of a _single_ path pattern.
+For this, we add an extra production to `<from_item>`: 
 
 ```EBNF
 <from_clause> ::=  
       'FROM' <from_item> [ ',' <from_item> ]*
   
 <from_item> ::= 
-      <expr_query> [ 'AS' <id> [ AT <id> ]? ]?
+    // ...
     | <expr_query> 'MATCH' <selector>? <path_pattern> [ 'AS' <id> [ AT <id> ]? ]?
-    // ... joins, etc
 ````
 
 ### Graph Patterns
@@ -257,7 +241,7 @@ elsewhere in the pattern, as well as graph-specific predicates and functions
 applied to these references.   
 
 
-## Evaluation Semantics
+## Evaluation
 
 ### Background: Evaluation in GPML
 
