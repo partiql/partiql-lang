@@ -452,7 +452,7 @@ Section 3 in [^gpml-paper] contains an informative overview of modern query lang
 with graph matching.
 
 
-# Unresolved questions
+# Unresolved Questions
 [unresolved-questions]: #unresolved-questions
 
 ### MATCH-Associated WHERE
@@ -521,6 +521,46 @@ first-class values in PartiQL or be limited to the scope of `MATCH` expressions.
   The non-graph PartiQL data model would remain simple, 
   while the overall language should still be able to support all interesting use cases.
   It seems likely this approach is being chosen for SQL/PGQ.
+
+
+### Expressing Path Bindings in MATCH Result
+
+While GPML patterns support path variables, which bind to graph paths within 
+graph fragments that constitute the result of a pattern match, 
+this RFC does not specify how to represent these path bindings in the 
+final result of a PartiQL `MATCH` expression. 
+This is obvious from the explicit exclusions in two places in the evaluation semantics
+where paths are encountered.
+
+While representing a singleton variable bound to a node or an edge 
+as the latter's payload
+fairly naturally translates to representing a group variable 
+as a sequence of payloads for the nodes or edges that the variable annotates, 
+settling on a natural way to extend this approach to path variables
+is not straightforward. 
+
+In the first approximation, the MATCH-result residual
+of a graph path bound to a path variable should probably be a list 
+composed of payloads of certain nodes and edges on the path. 
+However, clarifying details of this idea leads to questions such as
+- Should this residual only contain payloads of elements of the path named by 
+  node/edge variables or should it include anonymous elements as well?
+- Should we address the double representation of node/edge variables
+  (once as the top-level attributes in the result struct and then again
+  within the path's residual)?
+  - Is there a way to express the connection between the two representations?
+  - Or should those variables that occur within a path be only present in the 
+    path's residual and not on the top level?
+    But then placement of node/edge variables in the result struct
+    would become sensitive to the presence or absence of path variables, 
+    which is a disadvantage relative to the always-on-top-level placement. 
+- Do nested named path patterns lead to a hierarchical structure of the 
+  result struct, or should these paths be "flattened out"? 
+
+While it could be possible to cobble together a "reasonable" solution based on 
+some choices from the above, the choices would be essentially arbitrary.
+At the same time, this design challenge is likely to be addressed in SQL/PGQ, 
+so it would be fitting for the PartiQL solution to be consistent. 
 
 
 # Future Possibilities
