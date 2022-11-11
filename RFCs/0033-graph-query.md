@@ -300,6 +300,36 @@ essential within the pattern matching process,
 to determine sameness of nodes and edges when they are probed for 
 being annotated with the same (singleton) pattern variable.
 
+**Example.** 
+In its Section 6, the GPML paper[^gpml-paper] works though pattern match 
+computation of an example query pattern 
+```SQL
+    MATCH TRAIL (a WHERE a.owner='Jay') 
+                [−[b:Transfer WHERE b.amount>5M]−>]+
+                (a) [−[:isLocatedIn]−>(c:City) | 
+                     −[:isLocatedIn]−>(c:Country)]
+```
+that is evaluated against the graph from Section 2 of the paper.
+This pattern has singleton node variables `a` and `c` and 
+a group edge variable `b`.
+This is also a valid PartiQL graph pattern as proposed here, 
+provided its input graph uses structs as payloads at node and edges, 
+to model property graphs. (Making subexpressions `a.owner` and 'b.amount` valid.)
+
+The final result of this pattern matching, given in Subsection 6.5 of the paper, 
+is a bag with two graph fragments, each consisting of 
+one annotated path (because the pattern consists of only one path pattern):
+```
+a   b       b       b       b   a        c 
+a4  t4  a6  t5  a3  t2  a2  t3  a4  li4  c2
+
+a   b       b       b       b       b       b       b   a        c 
+a4  t4  a6  t5  a3  t7  a5  t8  a1  t1  a3  t2  a2  t3  a4  li4  c2
+```
+where, for each of the two fragments, 
+the second row is a sequence of internal identifiers for the nodes and edges 
+in the graph and the first row are the pattern-variable annotations.
+
 
 ### Evaluation of Graph Pattern Matching in PartiQL
 
@@ -397,6 +427,39 @@ of the form _v_**.a** where _v_ is a node or an edge and **a** is a property nam
 - In PartiQL, **.a** remains the operation of a key lookup in a struct, 
   which would succeed under the above semantics 
   as long as _v_ has a struct as its payload.
+
+**Example.**
+Continuing the example from the previous section, 
+the result of the PartiQL match expression is a bag of two structs
+containing attributes named as pattern variables and 
+carrying values drawn from payloads of the matched nodes and edges: 
+```
+<<
+    { 
+      'a' : { 'owner' : 'Jay',  'isBlocked' : 'yes' },
+      'b' : [
+               { 'date' : '4/1/2020', 'amount' : 10M },
+               { 'date' : '6/1/2020', 'amount' : 10M },
+               { 'date' : '2/1/2020', 'amount' : 10M },
+               { 'date' : '3/1/2020', 'amount' : 10M }
+            ],
+      'c' : { 'name' : 'Ankh-Morpork' }
+    },
+    {
+      'a' : { 'owner' : 'Jay',  'isBlocked' : 'yes' },
+      'b' : [
+               { 'date' : '4/1/2020', 'amount' : 10M },
+               { 'date' : '6/1/2020', 'amount' : 10M },
+               { 'date' : '8/1/2020', 'amount' : 6M },
+               { 'date' : '9/1/2020', 'amount' : 9M },
+               { 'date' : '1/1/2020', 'amount' : 8M },
+               { 'date' : '2/1/2020', 'amount' : 10M },
+               { 'date' : '3/1/2020', 'amount' : 10M }
+            ],
+      'c' : { 'name' : 'Ankh-Morpork' }
+    }
+>>
+```
 
 
 ## Implementation-Dependent Aspects
