@@ -163,27 +163,27 @@ Reference xref:builtins-sql.adoc[SQL Builtins]
 |
 
 |ABS
-^|🟥
+^|🟩
 |Absolute value
 |
 
 |SQRT
-^|🟥
+^|🟩
 |Square root
 |
 
 |EXP
-^|🟥
+^|🟩
 |Exponential function
 |
 
 |POWER
-^|🟥
+^|🟩
 |Exponentiation
 |
 
 |LN
-^|🟥
+^|🟩
 |Natural log
 |
 
