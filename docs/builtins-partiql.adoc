@@ -148,7 +148,7 @@ Reference xref:builtins-sql.adoc[SQL Builtins]
 |
 
 |MOD
-^|🟩
+^|🟥
 |Modulus
 |
 
