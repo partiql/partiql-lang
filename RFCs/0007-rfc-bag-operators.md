@@ -9,9 +9,9 @@ This RFC defines the PartiQL specification for the operators: UNION, INTERSECT, 
 # Motivation
 [motivation]: #motivation
 
-The operators UNION, INTERSECT, and EXCEPT have been defined since SQL-92 specifications, yet these are missing from the PartiQL specification. These operators are the typical [multiset union, intersect, and difference](https://en.wikipedia.org/wiki/Multiset) respectively for compatible relations. Two relations *R1* and *R2* are compatible for set operators if they have the same number of columns and the *i*-th column of *R1* is comparable to the *i*-th column of *R2*. Comparability in PartiQL conforms to the SQL specification and is defined in Appendix D. SQL compatbility for set operators is discussed in the following section, and a detailed look can be found in Appendix A.
+The operators UNION, INTERSECT, and EXCEPT have been defined since SQL-92 specifications, yet these are missing from the PartiQL specification. These operators are the typical SQL `<non-join query expression>`s to combine queries for compatible relations. Two relations *R1* and *R2* are compatible for set operators if they have the same number of columns and the *i*-th column of *R1* is comparable to the *i*-th column of *R2*. Comparability in PartiQL conforms to the SQL specification and is defined in Appendix D. SQL compatibility for set operators is discussed in the following section, and a detailed look can be found in Appendix A.
 
-The additional *OUTER* variants of each set operator are an extension to the SQL standard. These extended operators are the mathematical multiset operators, and operands are combined without compatibility concerns. These variants allow for combining any value by coercing the arguments to a multiset (bag). A scalar values is coerced into a singleton bag; a list is coerced to a bag by discarding ordering; NULL and MISSING are coerced into the empty bag.
+The additional *OUTER* variants of each set operator are an extension to the SQL standard and are combined without compatibility concerns. These variants allow for combining any value by coercing the arguments to a bag. A scalar value is coerced into a singleton bag; a list is coerced to a bag by discarding ordering; NULL and MISSING are coerced into the empty bag.
 
 # Guide-level explanation
 [guide-level-explanation]: #guide-level-explanation
@@ -31,24 +31,32 @@ Each bag operator has the form *q S q'* where *q* and *q'* are of type *\<query\
 Let *T1* and *T2* be two compatible relations, and let *TR* be the result of a set operator. The standard SQL bag operators are defined as:
 
 ```
-T1 UNION ALL T2     = MULTISET_UNION(T1, T2)
-T1 INTERSECT ALL T2 = MULTISET_INTERSECT(T1, T2)
-T1 EXCEPT ALL T2    = MULTISET_DIFFERENCE(T1, T2)
+T1 UNION ALL T2     = SQL_UNION(T1, T2)
+T1 INTERSECT ALL T2 = SQL_INTERSECT(T1, T2)
+T1 EXCEPT ALL T2    = SQL_EXCEPT(T1, T2)
 
-T1 UNION DISTINCT T2     = DISTINCT(MULTISET_UNION(T1, T2))
-T1 INTERSECT DISTINCT T2 = DISTINCT(MULTISET_INTERSECT(T1, T2))
-T1 EXCEPT DISTINCT T2    = DISTINCT(MULTISET_DIFFERENCE(T1, T2))
+T1 UNION DISTINCT T2     = DISTINCT(SQL_UNION(T1, T2))
+T1 INTERSECT DISTINCT T2 = DISTINCT(SQL_INTERSECT(T1, T2))
+T1 EXCEPT DISTINCT T2    = DISTINCT(SQL_EXCEPT(T1, T2))
 ```
 
-Let *V1* and *V2* be arbitrary values, and let *C* be a function which coerces a value to a bag. The *OUTER* operators are defined as
-```
-V1 OUTER UNION ALL V2     = MULTISET_UNION(F(V1), F(V2))
-V1 OUTER INTERSECT ALL V2 = MULTISET_INTERSECT(F(V1), F(V2))
-V1 OUTER EXCEPT ALL V2    = MULTISET_DIFFERENCE(F(V1), F(V2))
+The SQL operators are defined in terms of: let *R* be some row in *T1* or *T2* or both. Let *m* be the number of duplicates of *R* in *T1* and let *n* be the number of duplicates of *R* in *T2* with *m* >= 0 and *n* >= 0.
 
-V1 OUTER UNION DISTINCT V2     = DISTINCT(MULTISET_UNION(F(V1), F(V2)))
-V1 OUTER INTERSECT DISTINCT V2 = DISTINCT(MULTISET_INTERSECT(F(V1), F(V2)))
-V1 OUTER EXCEPT DISTINCT V2    = DISTINCT(MULTISET_DIFFERENCE(F(V1), F(V2)))
+For *SQL_UNION*, the number of duplicates of *R* in *TR* will be *(m + n)*.
+
+For *SQL_INTERSECT*, the number of duplicates of *R* in *TR* will be the minimum of *m* and *n*.
+
+For *SQL_EXCEPT*, the number of duplicates of *R* in *TR* will be the maximum of *(m - n)* and *0*.
+
+Let *V1* and *V2* be arbitrary values, and let *F* be a function which coerces a value to a bag. The *OUTER* operators are defined as
+```
+V1 OUTER UNION ALL V2     = SQL_UNION(F(V1), F(V2))
+V1 OUTER INTERSECT ALL V2 = SQL_INTERSECT(F(V1), F(V2))
+V1 OUTER EXCEPT ALL V2    = SQL_EXCEPT(F(V1), F(V2))
+
+V1 OUTER UNION DISTINCT V2     = DISTINCT(SQL_UNION(F(V1), F(V2)))
+V1 OUTER INTERSECT DISTINCT V2 = DISTINCT(SQL_INTERSECT(F(V1), F(V2)))
+V1 OUTER EXCEPT DISTINCT V2    = DISTINCT(SQL_EXCEPT(F(V1), F(V2)))
 ```
 
 The coercion function *F* is defined for all PartiQL values (Appendix C) by:
@@ -78,7 +86,7 @@ Each set operator produces a new relation *TR* which has its own column descript
 
 These rules tell us, in the presence of schema, the set operators are valid when the argument relations are set operator compatible; and the resultant column descriptors inherit their names and nullability from the column descriptors of the arguments.
 
-- \* If the statement contains a *CORRESPONDING* clause, then the column descriptors of *T1* and *T2* will be compared by the delcared order of column names in the *CORRESPONDING* list.
+- \* If the statement contains a *CORRESPONDING* clause, then the column descriptors of *T1* and *T2* will be compared by the declared order of column names in the *CORRESPONDING* list.
 
 ## Examples
 
@@ -89,9 +97,9 @@ These rules tell us, in the presence of schema, the set operators are valid when
   1. Without *CORRESPONDING* Clause
   2. With *CORRESPONDING* Clause
   3. Using *OUTER UNION*
-3. Union of Heterogenous Relations
+3. Union of Heterogeneous Relations
 4. Intersection of Compatible Relations
-5. Difference of Compatible Relations
+5. Except of Compatible Relations
 6. Value Coercion
 7. NULL and MISSING Coercion
 
@@ -311,7 +319,7 @@ SELECT * FROM engineering.employees
 -- OK!
 ```
 
-#### Example 3 — Union of Heterogenous Relations
+#### Example 3 — Union of Heterogeneous Relations
 
 Here we attempt to union the job titles in HR and Engineering, but there is a mistake. The known static type of *T1* is not compatible with the known static type of *T2*. The column descriptors of each relation are shown below. These relations are not compatible for the standard SQL union.
 
@@ -376,7 +384,7 @@ SELECT title FROM hr.employees INTERSECT SELECT title FROM engineering.employees
 -- OK!
 ```
 
-#### Example 5 — Difference of Compatible Relations
+#### Example 5 — Except of Compatible Relations
 
 ```sql
 SELECT title FROM engineering.employees EXCEPT (
@@ -473,12 +481,12 @@ TABLE engineering.employees OUTER INTERSECT MISSING       -- equivalent
 # Drawbacks
 [drawbacks]: #drawbacks
 
-We do not recognized drawbacks to implementing these features as these are clearly defined in the specification yet missing from the implementation.
+We do not recognize drawbacks to implementing these features as these are clearly defined in the specification yet missing from the implementation.
 
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
 
-The proposal is based upon the bag operators of SQL++ [1]. These operators define the extension of SQL bag operators for heterogenous, semi-structured data. Implementing these operators in required for ISO SQL compliance so there are no alternatives.
+The proposal is based upon the bag operators of SQL++ [1]. These operators define the extension of SQL bag operators for heterogeneous, semi-structured data. Implementing these operators in required for ISO SQL compliance so there are no alternatives.
 
 [1] *The SQL++ Unifying Semi-structured Query Language*: Kian Win Ong, Yannis Papakonstantinou, Romain Vernoux.
 
@@ -491,7 +499,7 @@ As previously covered, these operators are defined in both the ISO SQL spec as w
 2. Coercion Behavior
 3. Equality
 
-With respect to the above, PartiQL has chosen to produce heterogenous bags in permissive mode and homogenous bags or error in conventional typing mode. PartiQL has chosen to coerce NULL and MISSING to the empty bag; but allows for a singleton bag of NULL or MISSING. Finally, equality in bag operators is consistent with equality used in the *GROUP BY* clause.
+With respect to the above, PartiQL has chosen to produce heterogeneous bags in permissive mode and homogenous bags or error in conventional typing mode. PartiQL has chosen to coerce NULL and MISSING to the empty bag; but allows for a singleton bag of NULL or MISSING. Finally, equality in bag operators is consistent with equality used in the *GROUP BY* clause.
 
 # Unresolved questions
 [unresolved-questions]: #unresolved-questions
@@ -530,7 +538,7 @@ S = {
 >> 
 ```
 
-Without this extension, OUTER UNION would behave like so. Each operand is coerrced into a singleton bag.
+Without this extension, OUTER UNION would behave like so. Each operand is coerced into a singleton bag.
 
 ```sql
 SELECT * FROM { 'A': 0, 'B': 1 }
@@ -568,7 +576,7 @@ SELECT * FROM { 'A': 2, 'B': 3, 'C': 4 }
 -- OK!
 ```
 
-Alternatively, we could combined the values by keys.
+Alternatively, we could combine the values by keys.
 
 ```sql
 SELECT * FROM { 'A': 0, 'B': 1 }
@@ -585,13 +593,13 @@ SELECT * FROM { 'A': 2, 'B': 3, 'C': 4 }
 -- OK!
 ```
 
-This has been included for future extension because it is related to the set operators, but is not in the SQL specifcation nor will it be added to the PartiQL specification.
+This has been included for future extension because it is related to the set operators, but is not in the SQL specification nor will it be added to the PartiQL specification.
 
 # Appendices
 
 ## Appendix A — SQL Set Operators
 
-The goal of this appendix is to clearly define the behavior of column descriptors for SQL-99 conformant set operators.
+The goal of this appendix is to clearly define the behavior of column descriptors for SQL-99 conformance set operators.
 
 http://web.cecs.pdx.edu/~len/sql1999.pdf
 
@@ -678,7 +686,7 @@ If a *<non-join_query_primary>* is a *<simple_table>*, then its column descripto
 Let *T1* and *T2* be the first and second operands of a set operator, and let *TR* be the result. 
 
 **Rule 1**
-If *CORRESPONDING* is sepcified, then
+If *CORRESPONDING* is specified, then
 1. The column name list cannot contain duplicates
 2. At least one column name of T1 must be in T2
 3. If no names are specified in the list, then the list is all the column names of T1.
@@ -695,7 +703,7 @@ If the i-th column of T1 and T2 does not have the same name, then the name of i-
 
 ## Appendix B — PartiQL Set Operator Grammar
 
-Aligning PartiQL parser implementation with the PartiQL specification. Right now, the parser will parse the arguments of each set operator as an expression, and the parser does not support the corresponding clause. Here is what we should consider updating our specifcation grammar to.
+Aligning PartiQL parser implementation with the PartiQL specification. Right now, the parser will parse the arguments of each set operator as an expression, and the parser does not support the corresponding clause. Here is what we should consider updating our specification grammar to.
 
 ```antlr
 query
