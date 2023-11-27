@@ -10,7 +10,7 @@ name: Publish to GH Pages
 on:
   push:
     branches:
-      - gh-pages-setup
+      - main
 
 jobs:
   publish:
