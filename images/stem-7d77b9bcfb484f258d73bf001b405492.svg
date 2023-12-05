@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="20.885418pt" height="12pt" viewBox="0 0 20.885418 12" version="1.1">
+<defs>
+<g>
+<symbol overflow="visible" id="glyph0-0">
+<path style="stroke:none;" d="M 1.5 0 L 1.5 -6.25 L 7.5 -6.25 L 7.5 0 Z M 7.3125 -0.15625 L 7.3125 -6.09375 L 1.6875 -6.09375 L 1.6875 -0.15625 Z M 7.3125 -0.15625 "/>
+</symbol>
+<symbol overflow="visible" id="glyph0-1">
+<path style="stroke:none;" d="M 2.421875 11.59375 L 2.421875 -0.40625 L 4.734375 -0.40625 L 4.734375 0 L 2.90625 0 L 2.90625 11.1875 L 4.734375 11.1875 L 4.734375 11.59375 Z M 2.421875 11.59375 "/>
+</symbol>
+<symbol overflow="visible" id="glyph0-2">
+<path style="stroke:none;" d="M 0.265625 11.59375 L 0.265625 11.1875 L 2.09375 11.1875 L 2.09375 0 L 0.265625 0 L 0.265625 -0.40625 L 2.5625 -0.40625 L 2.5625 11.59375 Z M 0.265625 11.59375 "/>
+</symbol>
+<symbol overflow="visible" id="glyph1-0">
+<path style="stroke:none;" d="M 0.59375 2.125 L 0.59375 -8.46875 L 6.59375 -8.46875 L 6.59375 2.125 Z M 1.265625 1.453125 L 5.9375 1.453125 L 5.9375 -7.78125 L 1.265625 -7.78125 Z M 1.265625 1.453125 "/>
+</symbol>
+<symbol overflow="visible" id="glyph1-1">
+<path style="stroke:none;" d="M 5.8125 -7.25 L 3.515625 -6.1875 L 5.8125 -5.09375 L 5.359375 -4.40625 L 3.328125 -5.671875 L 3.40625 -3.453125 L 2.609375 -3.453125 L 2.671875 -5.671875 L 0.640625 -4.40625 L 0.1875 -5.09375 L 2.484375 -6.171875 L 0.1875 -7.25 L 0.640625 -7.953125 L 2.671875 -6.671875 L 2.609375 -8.90625 L 3.40625 -8.90625 L 3.328125 -6.671875 L 5.359375 -7.953125 Z M 5.8125 -7.25 "/>
+</symbol>
+</g>
+</defs>
+<g id="surface736">
+<g style="fill:rgb(0%,0%,0%);fill-opacity:1;">
+  <use xlink:href="#glyph0-1" x="-0.425781" y="0.400537"/>
+</g>
+<g style="fill:rgb(0%,0%,0%);fill-opacity:1;">
+  <use xlink:href="#glyph1-1" x="7.441406" y="9.759766"/>
+</g>
+<g style="fill:rgb(0%,0%,0%);fill-opacity:1;">
+  <use xlink:href="#glyph0-2" x="17.652344" y="0.400537"/>
+</g>
+</g>
+</svg>
