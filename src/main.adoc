@@ -3,7 +3,8 @@ The PartiQL Specification Committee
 :doctype: book
 :creator: {author}
 :revnumber: v0.3.0-HEAD
-:revremark: PRE-RELEASE
+:version-label!:
+:revremark: PRE-RELEASE. See official releases at https://github.com/partiql/partiql-lang/releases
 :copyright: Copyright ©2019 Amazon.com Inc. or Affiliates (“Amazon”)
 :docinfo:
 :sectnums:
