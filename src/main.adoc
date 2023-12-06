@@ -11,7 +11,7 @@ The PartiQL Specification Committee
 :sectanchors:
 :sectlinks:
 :sectnumlevels: 5
-:toc:
+:toc: left
 :toclevels: 4
 :toc-title: Contents
 :pagenums:
