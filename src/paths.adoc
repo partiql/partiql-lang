@@ -181,7 +181,7 @@ preserve (when needed) the distinction between absent attribute and
 null-valued attribute.
 
 For example, the expression ` 'not a tuple'.a ` and the expression
-`{'a':1, 'b':2}` evaluate to `MISSING`.
+`{'a':1, 'b':2}.noSuchAttribute` evaluate to `MISSING`.
 
 The above semantics apply regardless of whether the tuple navigation
 is accomplished via the dot notation or via the array notation. For
