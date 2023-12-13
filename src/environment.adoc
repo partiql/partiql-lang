@@ -16,7 +16,7 @@ sfw_query = [ "WITH", query, "AS", variable ],
             [ "WHERE", expr_query ],
             [ "GROUP", "BY", expr_query, [ "AS", variable ],
                        { "," expr_query, [ "AS", variable ] },
-                       "GROUP", "AS", variable
+                       "GROUP", "AS", variable],
             [ "HAVING", expr_query ],
             [ [ "OUTER" ], ( "UNION"|"INTERSECT"|"EXCEPT" ), [ "ALL" ] sfw_query ],
             [ "ORDER", "BY", expr_query, [ "ASC" | "DESC" ], [ order_spec ],
@@ -58,15 +58,15 @@ names and the variables of the enclosing queries.
 A PartiQL query is either an _SFW query_ (i.e. `SELECT-FROM-WHERE`...,
 (lines 3-16) the grammar of <<#figure:query:bnf>>) or an _expression
 query_ (also called _simple expression_ in the rest,
-<<#figure:query:bnf> lines 17-30) such as a path expression (
-<<#figure:query:bnf> lines 25-30) or a function invocation. Unlike SQL
+<<#figure:query:bnf>> lines 17-30) such as a path expression (
+<<#figure:query:bnf>> lines 25-30) or a function invocation. Unlike SQL
 expressions, which are restricted to outputting scalar and null
 values, PartiQL expressions output arbitrary PartiQL values, and are
 fully composable within larger SFW queries and expressions. Indeed,
 PartiQL allows the top-level query to also be an expression query, not
 just a SFW query as in SQL.
 
-An PartiQL (sub)query is evaluated within an environment, which provides
+A PartiQL (sub)query is evaluated within an environment, which provides
 variable bindings (as defined next).
 
 [[sec:environments-and-bindings]]
@@ -213,9 +213,9 @@ stem:[p = <<>>]
 `FROM mydb.r AS x, mydb.s AS y` +
 stem:[B_"FROM"^"out" = B_"WHERE"^"in" = ] +
 stem:[< <] +
-stem:[  <<x:3, y:{'a':1, 'b':2}>>] +
-stem:[  <<x:3, y:{'a':3}>>] +
-stem:[  <<x:'x', y:{'a':1, 'b':2}>>] +
+stem:[  <<x:3, y:{'a':1, 'b':2}>>,] +
+stem:[  <<x:3, y:{'a':3}>>,] +
+stem:[  <<x:'x', y:{'a':1, 'b':2}>>,] +
 stem:[  <<x:'x', y:{'a':3}>>] +
 stem:[> >]
 
@@ -232,7 +232,7 @@ stem:["Result" = < < <<{"foo":3, "bar":1}>> > >]
 [discrete]
 ==== SFW query clauses as operators that input/output binding tuples
 
-Similar to SQL semantics, the clauses of an PartiQL SFW query are
+Similar to SQL semantics, the clauses of a PartiQL SFW query are
 evaluated in the following order: `WITH`, `FROM`, `LET`, `WHERE`,
 `GROUP BY`, `HAVING`, `LETTING` (which is special to PartiQL), `ORDER
 BY`, `LIMIT`/`OFFSET`, and `SELECT` (or `SELECT VALUE` or `PIVOT`,
@@ -344,13 +344,11 @@ Since this is an SQL query and PartiQL is backwards compatible to SQL,
 it is easy to tell that the `x` in `x.c` resolves to the variable
 defined by the inner query’s `FROM` clause.
 
-// TODO s/thinner/the inner/
-
 Technically, this scoping rule is captured by the following handling
 of binding tuples. The inner `FROM` clause is evaluated with a
 variables environment stem:[p = <<x:...>>]; its `x` is the one defined
 by the outer `FROM`. Then the inner `FROM` clause outputs a binding
-stem:[b = <<x..>>]; this `x` is defined by thinner `FROM`. Then the
+stem:[b = <<x..>>]; this `x` is defined by the inner `FROM`. Then the
 `x.c` is evaluated in the concatenation stem:[p||b] and because `x`
 appears in both stem:[p] and stem:[b], the concatenation keeps only
 the `x` of its right argument. Essentially by putting stem:[b] as the

@@ -150,10 +150,6 @@ The following are false:
 The following are also false.
 [source%unbreakable, partiql]
 ----
-{'a':1, 'b':2} = {'a':1}
-----
-[source%unbreakable, partiql]
-----
 {'a':1, 'b':2} = {'a':1, 'b':null}
 ----
 [source%unbreakable, partiql]
