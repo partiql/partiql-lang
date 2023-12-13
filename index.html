@@ -513,7 +513,7 @@ pre.pygments .tok-il { color: #0000DD; font-weight: bold } /* Literal.Number.Int
 <div class="details">
 <span id="author" class="author">The PartiQL Specification Committee</span><br>
 <span id="revnumber"> v0.3.0-HEAD,</span>
-<span id="revdate">2023-12-06</span>
+<span id="revdate">2023-12-13</span>
 <br><span id="revremark">PRE-RELEASE. See official releases at https://github.com/partiql/partiql-lang/releases</span>
 </div>
 <div id="toc" class="toc2">
@@ -1585,7 +1585,7 @@ null-valued attribute.</p>
 </div>
 <div class="paragraph">
 <p>For example, the expression ` 'not a tuple'.a ` and the expression
-<code>{'a':1, 'b':2}</code> evaluate to <code>MISSING</code>.</p>
+<code>{'a':1, 'b':2}.noSuchAttribute</code> evaluate to <code>MISSING</code>.</p>
 </div>
 <div class="paragraph">
 <p>The above semantics apply regardless of whether the tuple navigation
@@ -5175,7 +5175,7 @@ respect to schema addition.</p>
 <div id="footer">
 <div id="footer-text">
  v0.3.0-HEAD<br>
-Last updated 2023-12-06 21:55:07 UTC
+Last updated 2023-12-13 16:44:40 UTC
 </div>
 </div>
 <script type="text/x-mathjax-config">
