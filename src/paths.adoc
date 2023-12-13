@@ -180,7 +180,7 @@ appropriate features on how result tuples are constructed (see
 preserve (when needed) the distinction between absent attribute and
 null-valued attribute.
 
-For example, the expression ` 'not a tuple'.a ` and the expression
+For example, the expression `` 'not a tuple'.a `` and the expression
 `{'a':1, 'b':2}.noSuchAttribute` evaluate to `MISSING`.
 
 The above semantics apply regardless of whether the tuple navigation
@@ -202,9 +202,9 @@ the query processor can prove that the path expression is guaranteed to
 _always_ produce `MISSING`. The extent of error detection is
 implementation-specific.
 
-For example, in the presence of schema validation, an PartiQL query
+For example, in the presence of schema validation, a PartiQL query
 processor can throw a compile-time error when given the path expression
-`{a:1, b:2}.c`. In a more important and common case, an PartiQL implementation can
+`{a:1, b:2}.c`. In a more important and common case, a PartiQL implementation can
 utilize the input data schema to prove that a path expression _always_
 returns `MISSING` and thus throw a compile-time error. For example, assume that `sometable` is
 an SQL table whose schema does not include an attribute `c`. Then, an
@@ -216,7 +216,7 @@ the query:
 SELECT t.a, t.c FROM sometable AS t
 ----
 
-Apparently, such an PartiQL implementation is fully compatible with the
+Apparently, such a PartiQL implementation is fully compatible with the
 behavior of an SQL processor. Generally, if a rigid schema is explicitly
 present, a tuple path navigation error can be caught during compilation
 time; this is the case in SQL itself, where referring to a non-existent

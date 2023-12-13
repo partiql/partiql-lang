@@ -28,7 +28,7 @@ The result of
 
 [source%unbreakable, partiql]
 ----
-SELECT VALUES v.a
+SELECT VALUE v.a
 FROM [{'a':1, 'b':true}, {'a':2, 'b':null}, {'a':3}] v
 WHERE v.b
 ----

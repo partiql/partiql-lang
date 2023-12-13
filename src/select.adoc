@@ -294,7 +294,7 @@ The query
 [source%unbreakable, partiql]
 ----
 SELECT VALUE {'a':v.a, 'b':v.b}
-FROM [{'a':1, 'b':1}, {'a':2}]
+FROM [{'a':1, 'b':1}, {'a':2}] AS v
 ----
 
 results into
@@ -322,7 +322,7 @@ The query
 [source%unbreakable, partiql]
 ----
 SELECT VALUE [v.a, v.b]
-FROM [{'a':1, 'b':1}, {'a':2}]
+FROM [{'a':1, 'b':1}, {'a':2}] AS v
 ----
 
 results into
@@ -355,7 +355,7 @@ The query
 [source%unbreakable, partiql]
 ----
 SELECT VALUE v.b
-FROM [{'a':1, 'b':1}, {'a':2}]
+FROM [{'a':1, 'b':1}, {'a':2}] AS v
 ----
 
 results into
@@ -378,7 +378,7 @@ The query
 [source%unbreakable, partiql]
 ----
 SELECT VALUE <<v.a, v.b>>
-FROM [{'a':1, 'b':1}, {'a':2}]
+FROM [{'a':1, 'b':1}, {'a':2}] AS v
 ----
 
 results into
@@ -425,7 +425,7 @@ The query:
 
 [source%unbreakable, partiql]
 ----
-PIVOT t.price AT t.symbol
+PIVOT t.price AT t."symbol"
 FROM [{'symbol':'tdc', 'price': 31.52}, {'symbol': 'amzn', 'price': 840.05}] AS t
 ----
 
@@ -477,39 +477,43 @@ since `25` is not a legitimate attribute name.
 The SQL syntax:
 
 [source%unbreakable, partiql]
+[subs="+normal"]
 ----
-SELECT e1 AS a1, ..., en AS an
+SELECT e~1~ AS a~1~, ..., e~n~ AS a~n~
 ----
 
 is syntactic sugar for:
 
 [source%unbreakable, partiql]
+[subs="+normal"]
 ----
-SELECT VALUE {'a1':e1, ...., 'an':en}
+SELECT VALUE {'a~1~':e~1~, ..., 'a~n~':e~n~}
 ----
 
 whereas if the attribute name stem:[a_i] is written as an identifier
 (e.g., `a` or `"a"`) it is replaced by a single-quoted form
-stem:[a_1'] (e.g., `'a'`).
+stem:['a_1'] (e.g., `'a'`).
 
-When the expression stem:[e_i] is of the form stem:[e_i`.n] (i.e. a
+When the expression stem:[e_i] is of the form stem:[e_i.n] (i.e. a
 path that navigates into tuple attribute stem:[n]), PartiQL follows
 SQL in allowing the attribute name to be optional. In this case,
 
 [source%unbreakable, partiql]
+[subs="+normal"]
 ----
-SELECT ...ei.n...
+SELECT ... e~i~.n...
 ----
 
 is equivalent to
 
 [source%unbreakable, partiql]
+[subs="+normal"]
 ----
-SELECT ...ei.n AS n...
+SELECT ... e~i~.n AS n...
 ----
 
 In the case that the expression stem:[e_i] is not of the form
-stem:[e_i`.n] the clause:
+stem:[e_i.n] the clause:
 
 [source%unbreakable, partiql]
 ----
@@ -600,19 +604,21 @@ stem:[{"'_1'":v_1}] (resp. stem:[{"'_2'":v_3}].
 
 
 [source%unbreakable, partiql]
+[subs="+normal"]
 ----
-SELECT v1.*, e2 AS a, v3.*
+SELECT v~1~.\*, e~2~ AS a, v~3~.*
 ----
 
 is equivalent to
 
 
 [source%unbreakable, partiql]
+[subs="+normal"]
 ----
 SELECT VALUE TUPLEUNION(
-       CASE WHEN v1 IS TUPLE THEN v1 ELSE {'_1': v1} END,
-       {'a':e2 },
-       CASE WHEN v3 IS TUPLE THEN v3 ELSE {'_2': v3} END
+       CASE WHEN v~1~ IS TUPLE THEN v~1~ ELSE {'_1': v~1~} END,
+       {'a':e~2~ },
+       CASE WHEN v~3~ IS TUPLE THEN v~3~ ELSE {'_2': v~3~} END
 )
 ----
 
@@ -725,10 +731,10 @@ The result is
 
 [source%unbreakable, partiql]
 ----
-[
+<<
     {'co':0.7, 'co2':0.5},
     {'co':0.4, 'co2':1.3}
-]
+>>
 ----
 
 Intuitively, the `UNPIVOT` turns every instance of the tuple `t` into
