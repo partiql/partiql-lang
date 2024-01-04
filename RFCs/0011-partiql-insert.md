@@ -71,17 +71,15 @@ Note:
 <index target> ::= <index attr name>
 
 <conflict action> ::= DO NOTHING 
-    | DO UPDATE <do update>
-    | DO REPLACE <do replace>
+    | DO UPDATE <do update> [ WHERE <condition> ]
+    | DO REPLACE <do replace> [ WHERE <condition> ]
 
 <do update> ::= EXCLUDED
     | SET <attr values> [, <attr values>]...
-   [ WHERE <condition> ]
 
 <do replace> ::= EXCLUDED
     | SET <attr values> [, <attr values>]...
     | VALUE <tuple value>
-   [ WHERE <condition> ]
 
 <attr values> ::=  {
             <attr name> = { <value expr> | DEFAULT }
@@ -896,6 +894,22 @@ INSERT into Customers
 <<{ 'HK': 2, 'RK': 1, 'myAttr': 12, 'anotherAttr': 'hello' }>>
 ON CONFLICT
     DO REPLACE EXCLUDED;
+```
+
+##### Example 4.2.14
+
+The following example conditionally replaces the existing item with the item provided by `INSERT` statement. Note that as an outcome the statement does not replace the existing item because the condition is not met.
+
+```SQL
+-- Existing items is:
+--  {'HK': 1, 'RK': 1, 'myAttr': 5 },
+-- Outcome is:
+--  {'HK': 1, 'RK': 1, 'myAttr': 5 },
+
+INSERT into Customers
+<<{ 'HK': 2, 'RK': 1, 'myAttr': 13, 'anotherAttr': 15 }>>
+ON CONFLICT
+    DO REPLACE EXCLUDED WHERE EXCLUDED.anotherAttr = 12;
 ```
 
 ## 5. Other Examples
