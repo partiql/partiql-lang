@@ -125,7 +125,7 @@ GROUP BY l.sensor AS sensor GROUP AS g
 Notice, the output binding tuple provides the partitioned input
 binding tuples in the group variable stem:[g], which can be explicitly
 utilized in subsequent `HAVING`, `ORDER BY`, and `SELECT`
-clauses. Thus, an PartiQL query can perform complex computations on
+clauses. Thus, a PartiQL query can perform complex computations on
 the groups, leading to results of any type (e.g.  collections nested
 within collections). The explicit presence of groups in PartiQL, while
 more general than SQL, also leads to simpler semantics than those of
@@ -565,8 +565,8 @@ written in an SQL compatible way as
 [source%unbreakable, partiql]
 ----
 SELECT l.sensor AS sensor,
-       AVG(l.co) AS avg,
-       COUNT(*) AS count
+       AVG(l.co) AS "avg",
+       COUNT(*) AS "count"
 FROM logs AS l
 GROUP BY l.sensor
 ----

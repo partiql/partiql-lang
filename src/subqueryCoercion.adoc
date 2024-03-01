@@ -11,7 +11,7 @@ following cases replicate SQL’s coercing behavior and analyze in which
 cases the result of a subquery coerces into scalar and in which cases
 they coerce into arrays.
 
-An PartiQL extension with respect to SQL is that, in the permissive
+A PartiQL extension with respect to SQL is that, in the permissive
 mode, subqueries that fail to coerce to the required type (scalar or
 tuple) still run, as opposed to failing. They simply omit from the
 results the data that correspond to the coercion failures.

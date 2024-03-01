@@ -11,7 +11,7 @@ single item (<<sec:single-item-from>> and <<sec:unpivot>>). The term
 "`semantics of the item stem:[f]`" is synonymous to the term
 "`semantics of a clause with the single item stem:[f]`". In either
 case, we refer to the specification of the collection of binding
-tuples stem:[B^{out}_{\from}] that results from the evaluation of
+tuples stem:[B_"FROM"^"out"] that results from the evaluation of
 "`stem:[f]`".
 
 2. Then the semantics specify how multiple items combine, according to
@@ -69,7 +69,7 @@ FROM someOrderedTable AS x AT y
 outputs the bag of binding tuples:
 
 stem:[B_"FROM"^"out" =] stem:[< <] +
-stem:["    " << x: {'a':0, 'b':0}, y:0 >> ] +
+stem:["    " << x: {'a':0, 'b':0}, y:0 >>, ] +
 stem:["    " << x: {'a':1, 'b':1}, y:1 >> ] +
 stem:[ > > ]
 ====
@@ -281,14 +281,14 @@ The clause:
 
 [source%unbreakable, partiql]
 ----
-FROM UNPIVOT justATuple AS price AT symbol
+FROM UNPIVOT justATuple AS price AT sym
 ----
 
 outputs:
 
 stem:[B_"FROM"^"out" =] stem:[< <] +
-stem:[ << price: 840.05, symbol: 'amzn' >> ] +
-stem:[ << price: 31.06, symbol: 'tdc' >> ] +
+stem:[ << price: 840.05, sym: 'amzn' >>, ] +
+stem:[ << price: 31.06, sym: 'tdc' >> ] +
 stem:[ > > ]
 ====
 
@@ -471,9 +471,9 @@ keyword, and presumably, one would put the sensible equality condition
 clause outputs the bag of binding tuples:
 
 stem:[B_"FROM"^"out" = < <] +
-stem:[ << c: {"'id'": 5, "'name'": "'Joe'"}, o: {"'custId'": 7, "'productId'": 101} >> ] +
-stem:[ << c: {"'id'": 5, "'name'": "'Joe'"}, o: {"'custId'": 7, "'productId'": 523} >> ] +
-stem:[ << c: {"'id'": 7, "'name'": "'Mary'"}, o: {"'custId'": 7, "'productId'": 101} >> ] +
+stem:[ << c: {"'id'": 5, "'name'": "'Joe'"}, o: {"'custId'": 7, "'productId'": 101} >>, ] +
+stem:[ << c: {"'id'": 5, "'name'": "'Joe'"}, o: {"'custId'": 7, "'productId'": 523} >>, ] +
+stem:[ << c: {"'id'": 7, "'name'": "'Mary'"}, o: {"'custId'": 7, "'productId'": 101} >>, ] +
 stem:[ << c: {"'id'": 7, "'name'": "'Mary'"}, o: {"'custId'": 7, "'productId'": 523} >> ] +
 stem:[> >]
 ====
@@ -497,8 +497,8 @@ Consider the database:
 
 stem:[ p_0 = << ] +
 stem:[    "sensors": \[ ] +
-stem:[        {"'readings'": [{"'v'": 1.3}, {"'v'": 2}]}, ] +
-stem:[        {"'readings'": [{"'v'": 0.7}, {"'v'": 0.8}, {"'v'": 0.9}]} ] +
+stem:[        {"'readings'": [{"'v'": 1.3}, {"'v'": 2}\]}, ] +
+stem:[        {"'readings'": [{"'v'": 0.7}, {"'v'": 0.8}, {"'v'": 0.9}\]} ] +
 stem:[    \] ] +
 stem:[ >> ]
 
@@ -511,11 +511,11 @@ FROM sensors AS s, s.readings AS r
 ----
 
 stem:[B_"FROM"^"out" = < <] +
-stem:[   s: {"'readings'": \[{"'v'": 1.3}, {"'v'": 2}\]}, r: {v:1.3} ] +
-stem:[   s: {"'readings'": \[{"'v'": 1.3}, {"'v'": 2}\]}, r: {v:2} ] +
-stem:[   s: {"'readings'": \[{"'v'": 0.7}, {"'v'": 0.8}, {"'v'": 0.9}\]}, r: {"'v'":0.7} ] +
-stem:[   s: {"'readings'": \[{"'v'": 0.7}, {"'v'": 0.8}, {"'v'": 0.9}\]}, r: {"'v'":0.8} ] +
-stem:[   s: {"'readings'": \[{"'v'": 0.7}, {"'v'": 0.8}, {"'v'": 0.9}\]}, r: {"'v'":0.9} ] +
+stem:[   << s: {"'readings'": \[{"'v'": 1.3}, {"'v'": 2}\]}, r: {"'v'":1.3} >> ] +
+stem:[   << s: {"'readings'": \[{"'v'": 1.3}, {"'v'": 2}\]}, r: {"'v'":2} >> ] +
+stem:[   << s: {"'readings'": \[{"'v'": 0.7}, {"'v'": 0.8}, {"'v'": 0.9}\]}, r: {"'v'":0.7} >> ] +
+stem:[   << s: {"'readings'": \[{"'v'": 0.7}, {"'v'": 0.8}, {"'v'": 0.9}\]}, r: {"'v'":0.8} >> ] +
+stem:[   << s: {"'readings'": \[{"'v'": 0.7}, {"'v'": 0.8}, {"'v'": 0.9}\]}, r: {"'v'":0.9} >> ] +
 stem:[> >]
 ====
 
@@ -574,7 +574,7 @@ Consider the database:
 
 stem:[ p_0 = << ] +
 stem:[    "sensors": \[ ] +
-stem:[        {"'readings'": \[{"'v'":1.3}, {"'v'":2}\]} ] +
+stem:[        {"'readings'": \[{"'v'":1.3}, {"'v'":2}\]}, ] +
 stem:[        {"'readings'": \[{"'v'":0.7}, {"'v'":0.8}, {"'v'":0.9}\]}, ] +
 stem:[        {"'readings'": \[\]} ] +
 stem:[      \] ] +
@@ -591,13 +591,13 @@ FROM sensors AS s LEFT CROSS JOIN s.readings AS r
 ----
 
 stem:[B_"FROM"^"out" = < <] +
-stem:[ s: {"'readings'": \[{"'v'":1.3}, {"'v'":2}\]}, r: {"'v'":1.3} ] +
-stem:[ s: {"'readings'": \[{"'v'":1.3}, {"'v'":2}\]}, r: {"'v'":2} ] +
-stem:[ s: {"'readings'": \[{"'v'":0.7}, {"'v'":0.8}, {"'v'":0.9}\]}, r: {"'v'":0.7} ] +
-stem:[ s: {"'readings'": \[{"'v'":0.7}, {"'v'":0.8}, {"'v'":0.9}\]}, r: {"'v'":0.8} ] +
-stem:[ s: {"'readings'": \[{"'v'":0.7}, {"'v'":0.8}, {"'v'":0.9}\]}, r: {"'v'":0.9} ] +
-stem:[ s: {"'readings'": \[\]}, r: "NULL" ] +
-stem:[ >> ]
+stem:[ << s: {"'readings'": \[{"'v'":1.3}, {"'v'":2}\]}, r: {"'v'":1.3} >>, ] +
+stem:[ << s: {"'readings'": \[{"'v'":1.3}, {"'v'":2}\]}, r: {"'v'":2} >>, ] +
+stem:[ << s: {"'readings'": \[{"'v'":0.7}, {"'v'":0.8}, {"'v'":0.9}\]}, r: {"'v'":0.7} >>, ] +
+stem:[ << s: {"'readings'": \[{"'v'":0.7}, {"'v'":0.8}, {"'v'":0.9}\]}, r: {"'v'":0.8} >>, ] +
+stem:[ << s: {"'readings'": \[{"'v'":0.7}, {"'v'":0.8}, {"'v'":0.9}\]}, r: {"'v'":0.9} >>, ] +
+stem:[ << s: {"'readings'": \[\]}, r: "NULL" >> ] +
+stem:[ > > ]
 ====
 
 
