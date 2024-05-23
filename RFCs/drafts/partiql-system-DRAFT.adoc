@@ -12,7 +12,7 @@ This RFC defines the basic model of a PartiQL System which is composed of _catal
 
 The PartiQL Specification briefly mentions a _database environment_ which is akin to a single catalog and schema, but we have yet-to-define fundamental system concepts such as catalogs, schemas, information_schema, and the SQL PATH. These concepts govern all current PartiQL functionality (table and function resolution), developing functionality such as DDL/DML, as well as future functionality such as views.
 
-We are motivated to make clear the relationship between PartiQL and SQL in regards to catalogs and schemas; but are motivated to relax some SQL restrictions to make PartiQL adaptable to systems which do not strictly adhere to the SQL specification. This adapatability comes from relaxing the fixed hierarchy (catalog > schema > table) of SQL systems to be UNIX-like with arbitrary filesystem hierarchies. We have found this structure to better fit real-world systems which either lack schemas or nest schemas. Note that schema here means "collection of database entities: tables, routines, triggers, etc." rather than the type description of a table. For this reason, we will disambiguate the term and call these collections _scopes_ rather than _schemas_.
+We are motivated to make clear the relationship between PartiQL and SQL in regards to catalogs and schemas; but are motivated to relax some SQL restrictions to make PartiQL adaptable to systems which do not strictly adhere to the SQL specification. This adapatability comes from relaxing the fixed hierarchy (_catalog > schema > table_) of SQL systems to be UNIX-like with arbitrary filesystem hierarchies. We have found this structure to better fit real-world systems which either lack schemas or nest schemas. Note that schema here means "collection of database entities: tables, routines, triggers, etc." rather than the type description of a table. For this reason, we will disambiguate the term and call these collections _scopes_ rather than _schemas_.
 
 This RFC focusses on the catalog and execution semantics of name resolution; it does not include other topics such as transactions, recovery, access control, or constraint enforcement.
 
@@ -39,10 +39,9 @@ This RFC focusses on the catalog and execution semantics of name resolution; it 
 .. **DDL**: Definition statements such as CREATE TABLE.
 .. **DML**: Manipulation statements such as INSERT, UPDATE and DELETE.
 .. **query**: A _DQL_ statement is typically called a _query_.
-. **identifier**: A reference to something such as a _catalog_ or _object_.
 . **CRUD**: The fundamental data operations e.g. INSERT / SELECT / UPDATE / DELETE 
 
-[loweralpha,title="Catalogs",start=4]
+[loweralpha,title="Catalogs",start=7]
 . **catalog**: A named collection of _objects_ at the root of a _PartiQL-system_.
 . **object**: A named item of a catalog; e.g. scope, table, view, or routine.
 . **scope**: A named collection of _objects_; scopes can contain other scopes.
@@ -51,12 +50,12 @@ This RFC focusses on the catalog and execution semantics of name resolution; it 
 . **routine**: A named function or procedure which is usable in a _statement_.
 .. **function**: A routine invoked in the context of a value expression.
 .. **procedure**: A routine invoked as a CALL statement.
-. **name**: An identifier associated with a _catalog object_.
+. **name**: An identifier associated with a _catalog_ or _object_.
 
-[loweralpha,title="Session",start=11]
+[loweralpha,title="Session",start=14]
 . **session**: A session is state for a _PartiQL-client_ that is used during statement processing.
 . **current scope**: A reference to a _scope_ used for name resolution.
-. **path**: A sequence of _scopes_ used for name resolution.
+. **path**: A sequence of _scope_ names which determine the search order for _object_ resolution.
 
 NOTE: A _catalog_ is just a _scope_ at the root level.
 
@@ -96,26 +95,84 @@ A _PartiQL-system_ is a link:https://en.wikipedia.org/wiki/Database#Database_man
 
 |===
 
-This system contains two catalogs, some nested scopes, and four tables. Note that this is less restrictive than an SQL-environment's catalogs and schemas. Unlike SQL, tables may appear under a catalog rather than only schemas; and schemas (scopes) may contain additional schemas (scopes). This abstraction much more like the directories and files of the UNIX filesystem.
-
-.Comparison of Terms
-|===
-| PartiQL | SQL | UNIX
-
-| Catalog | Catalog | `/<dir>`
-| Scope | Schema | `/**/<dir>`
-| Object | Object | `/**/<file>`
-
-|===
-
-NOTE: A _PartiQL-system_ can execute introspective queries (i.e. INFORMATION_SCHEMA) but that is out-of-scope.
+This example system contains two catalogs, some nested scopes, and four tables. Note that this is less restrictive than an SQL-environment's catalogs and schemas. Unlike SQL, tables may appear under a catalog rather than only schemas; and schemas (scopes) may contain additional schemas (scopes). This abstraction much more like the directories and files of the UNIX filesystem.
 
 ==== Session and Path
 
-A _PartiQL-client_ interacts with a _PartiQL-system_ by invoking statements with a given _session_. This session contains information about the client's state such as the current user, current scope, and session path. The current user can be used for permissions, but authorization in a _PartiQL-system_ is, at present, not defined.
+A _PartiQL-client_ interacts with a _PartiQL-system_ by invoking statements with a _session_. This session contains information about the client's state such as the current user, current scope, and session path. The current user may be used for permissions, but authorization in a _PartiQL-system_ is, at present, undefined. The current scope and session path determine how names (tables, functions, etc.) are resolved in a statement.
 
-The current scope and session path determine how names (tables, functions, etc.) are resolved in a statement. Names may be _absolute_ or _relative_ ... 
+A session's current scope is accessible in statements by using the _CURRENT_SCOPE_ variable. A client may update the current scope with the `USE SCOPE <name>` statement. For SQL compatibility, a _PartiQL-system_ must support `USE CATALOG <name>` and `USE SCHEMA <name>` — details are in the _SQL and UNIX Compatibility_ section.
 
+A session's path is accessible in statements by using the _CURRENT_PATH_ variable. A client may update the path with the `SET PATH <path>` statement. The path is a sequence (ordered collection) of names. The path is never empty and always contains the current scope followed by the current catalog. 
+
+.Session Statements
+[source]
+----
+USE SCOPE <name>;
+USE CATALOG <name>;
+USE SCHEMA <name>;
+
+SET SCOPE <name>;
+SET PATH <path>;
+----
+
+[IMPORTANT]
+.The session statements have two distinct behaviors.
+====
+. The `USE` statement comes from SQL systems and **will modify both the scope and path**.
+. The `SET` statement **will only modify the specified session attribute**.
+====
+
+==== Names and Resolution Rules
+
+> PLACEHOLDER
+
+In short, if a name is not fully-qualified then use the current_scope to fully-qualify the name. A fully-qualified name is resolved by searching the path first-to-last.
+
+[source]
+----
+//-----------------------------
+// References
+//-----------------------------
+// * SQL-99 5.4   "Names and Identifiers"
+// * SQL-99 10.3  "Path Specification"
+// * SQL-99 4.25  "SQL-paths"
+// * Postgres DDL Schemas https://www.postgresql.org/docs/current/ddl-schemas.html
+----
+
+=== SQL and UNIX Compatibility
+
+This section will compare and contrast this system to both SQL and UNIX systems. It will show how the _PartiQL-system_ is compatible with SQL while having the flexibility of a UNIX system.
+
+> PLACEHOLDER
+
+.System Comparisons
+[cols="1m,1m,1m"]
+|===
+| PartiQL | SQL | UNIX
+
+| catlog | catalog | `/<dir>`
+| scope | schema | `/**/<dir>`
+| object | object | `/**/<file>`
+| path | SQL-path | PATH
+| CURRENT_SCOPE | - | `pwd`
+| CURRENT_CATALOG | - | `echo $(pwd) \| cut -d/ -f2`
+| CURRENT_PATH | - | `echo $PATH`
+| USE SCOPE <name> | - | `cd <name> && export PATH=...`
+| USE CATALOG <name> | USE CATALOG* | `cd /<name> && export PATH=...`
+| USE SCHEMA <name> | USE SCHEMA* |  `cd /$CURRENT_CATALOG/<name> && export PATH=...`
+| SET SCOPE <name> | ... | `cd <name>`
+| SET PATH <path> | ... | `export PATH=<path>`
+
+|===
+
+NOTE: * These are not in the SQL-99 standard, but are ubiquitus in industry.
+
+NOTE: A _PartiQL-system_ can execute introspective queries (i.e. INFORMATION_SCHEMA) but that is out-of-scope.
+
+=== Examples
+
+> PLACEHOLDER
 
 == Reference-Level Explanation
 
@@ -170,6 +227,10 @@ The current scope and session path determine how names (tables, functions, etc.)
 == Future Possibilities
 
 > PLACEHOLDER
+
+=== Future RFCs
+
+* PartiQL-session
 
 // Think about what the natural extension and evolution of your proposal would be and how it would affect the language and project as a whole in a holistic way. Try to use this section as a tool to more fully consider all possible interactions with the project and language in your proposal. Also consider how this all fits into the roadmap for the project.
 
