@@ -1,0 +1,255 @@
+= PartiQL System
+
+* Start Date: 2024-22-05
+* PartiQL Issue: N/A
+* RFC PR: TODO
+
+== Summary
+
+This RFC defines the basic model of a PartiQL System which is composed of _catalogs_ and _scopes_ (_schemas_ in SQL). A PartiQL System is much like a Relational Database Management System (RDBMS) as defined in SQL-99, but with a generalized, UNIX-like structure which is compatible with both document and relational systems. This RFC also defines the _PATH_ session variable which determines _object_ (table, views, routines, triggers, etc.) resolution rules. Finally, we will compare and contrast to the system defined in SQL-99 as well as parts of the UNIX specification.
+
+== Motivation
+
+The PartiQL Specification briefly mentions a _database environment_ which is akin to a single catalog and schema, but we have yet-to-define fundamental system concepts such as catalogs, schemas, information_schema, and the SQL PATH. These concepts govern all current PartiQL functionality (table and function resolution), developing functionality such as DDL/DML, as well as future functionality such as views.
+
+We are motivated to make clear the relationship between PartiQL and SQL in regards to catalogs and schemas; but are motivated to relax some SQL restrictions to make PartiQL adaptable to systems which do not strictly adhere to the SQL specification. This adapatability comes from relaxing the fixed hierarchy (_catalog > schema > table_) of SQL systems to be UNIX-like with arbitrary filesystem hierarchies. We have found this structure to better fit real-world systems which either lack schemas or nest schemas. Note that schema here means "collection of database entities: tables, routines, triggers, etc." rather than the type description of a table. For this reason, we will disambiguate the term and call these collections _scopes_ rather than _schemas_.
+
+This RFC focusses on the catalog and execution semantics of name resolution; it does not include other topics such as transactions, recovery, access control, or constraint enforcement.
+
+== Guide-Level Explanation
+
+// Explain the proposal as if it were already included in the PartiQL specification or public APIs. The explanation should assume the reader has proficient knowledge on the existing PartiQL specification.
+
+// * Introducing new named concepts.
+// * Explaining the feature largely in terms of examples.
+// * Explaining how PartiQL users should _think_ about the feature, and how it should impact the way they use PartiQL. It should explain the impact as concretely as possible.
+// * If applicable, provide sample error messages, deprecation warnings, or migration guidance.
+// * If applicable, describe the differences between teaching this to existing PartiQL users and new PartiQL users.
+
+// For spec-oriented RFCs, this section should focus on how implementations, based on the proposed specification change, will get impacted. This section should include any required grammar that accompanies the specification change. For api-oriented RFCs, this section should focus on how PartiQL users would leverage or be affect by the changes.
+
+=== Definitions
+
+[loweralpha,title="System",start=1]
+. **PartiQL-system**: One or more _catalogs_ and a _PartiQL-implementation_.
+. **PartiQL-implementation**: A processor that executes _statements_ given a _session_.
+. **PartiQL-client**: Any entity which executes statements against a _PartiQL-system_.
+. **statement**: A string of characters conforming to the PartiQL syntax and semantics.
+.. **DQL**: Query statements such as SELECT.
+.. **DDL**: Definition statements such as CREATE TABLE.
+.. **DML**: Manipulation statements such as INSERT, UPDATE and DELETE.
+.. **query**: A _DQL_ statement is typically called a _query_.
+. **CRUD**: The fundamental data operations e.g. INSERT / SELECT / UPDATE / DELETE 
+
+[loweralpha,title="Catalogs",start=7]
+. **catalog**: A named collection of _objects_ at the root of a _PartiQL-system_.
+. **object**: A named item of a catalog; e.g. scope, table, view, or routine.
+. **scope**: A named collection of _objects_; scopes can contain other scopes.
+. **table**: A named value which is typically (but not necessarily) a collection of structs.
+. **view**: A named query statement.
+. **routine**: A named function or procedure which is usable in a _statement_.
+.. **function**: A routine invoked in the context of a value expression.
+.. **procedure**: A routine invoked as a CALL statement.
+. **name**: An identifier associated with a _catalog_ or _object_.
+
+[loweralpha,title="Session",start=14]
+. **session**: A session is state for a _PartiQL-client_ that is used during statement processing.
+. **current scope**: A reference to a _scope_ used for name resolution.
+. **path**: A sequence of _scope_ names which determine the search order for _object_ resolution.
+
+NOTE: A _catalog_ is just a _scope_ at the root level.
+
+=== Concepts
+
+==== System and Catalogs
+
+A _PartiQL-system_ is a link:https://en.wikipedia.org/wiki/Database#Database_management_system[Database Management System] with catalog metadata and facilities for storing and manipulating data. A system has one or more catalogs (named collections of objects) which form a hierarchical structure much like a file system. Objects within a catalog may be nested scopes, tables, routines, or views.
+
+.Example Hierarchy
+[source]
+----
+.
+├── a                       -- catalog  `.a`
+│   ├── T.table             -- table    `.a.T
+│   └── x                   -- scope    `.a.x`
+│       ├── y               -- scope    `.a.x.y`
+│       │   └── T.table     -- table    `.a.x.y.T`
+│       └── T.table         -- table    `.a.x.T`
+└── b                       -- catalog  `.b`
+    └── T.table             -- table    `.b.T`
+----
+
+.Objects
+[cols="1,3"]
+|===
+| Path | Type
+
+| `.a` | catalog
+| `.a.T` | table
+| `.a.x` | scope
+| `.a.x.y` | scope
+| `.a.x.y.T` | table
+| `.a.x.T` | table
+| `.b` | catalog
+| `.b.T` | table
+
+|===
+
+This example system contains two catalogs, some nested scopes, and four tables. Note that this is less restrictive than an SQL-environment's catalogs and schemas. Unlike SQL, tables may appear under a catalog rather than only schemas; and schemas (scopes) may contain additional schemas (scopes). This abstraction much more like the directories and files of the UNIX filesystem.
+
+==== Session and Path
+
+A _PartiQL-client_ interacts with a _PartiQL-system_ by invoking statements with a _session_. This session contains information about the client's state such as the current user, current scope, and session path. The current user may be used for permissions, but authorization in a _PartiQL-system_ is, at present, undefined. The current scope and session path determine how names (tables, functions, etc.) are resolved in a statement.
+
+A session's current scope is accessible in statements by using the _CURRENT_SCOPE_ variable. A client may update the current scope with the `USE SCOPE <name>` statement. For SQL compatibility, a _PartiQL-system_ must support `USE CATALOG <name>` and `USE SCHEMA <name>` — details are in the _SQL and UNIX Compatibility_ section.
+
+A session's path is accessible in statements by using the _CURRENT_PATH_ variable. A client may update the path with the `SET PATH <path>` statement. The path is a sequence (ordered collection) of names. The path is never empty and always contains the current scope followed by the current catalog. 
+
+.Session Statements
+[source]
+----
+USE SCOPE <name>;
+USE CATALOG <name>;
+USE SCHEMA <name>;
+
+SET SCOPE <name>;
+SET PATH <path>;
+----
+
+[IMPORTANT]
+.The session statements have two distinct behaviors.
+====
+. The `USE` statement comes from SQL systems and **will modify both the scope and path**.
+. The `SET` statement **will only modify the specified session attribute**.
+====
+
+==== Names and Resolution Rules
+
+> PLACEHOLDER
+
+In short, if a name is not fully-qualified then use the current_scope to fully-qualify the name. A fully-qualified name is resolved by searching the path first-to-last.
+
+[source]
+----
+//-----------------------------
+// References
+//-----------------------------
+// * SQL-99 5.4   "Names and Identifiers"
+// * SQL-99 10.3  "Path Specification"
+// * SQL-99 4.25  "SQL-paths"
+// * Postgres DDL Schemas https://www.postgresql.org/docs/current/ddl-schemas.html
+----
+
+=== SQL and UNIX Compatibility
+
+This section will compare and contrast this system to both SQL and UNIX systems. It will show how the _PartiQL-system_ is compatible with SQL while having the flexibility of a UNIX system.
+
+> PLACEHOLDER
+
+.System Comparisons
+[cols="1m,1m,1m"]
+|===
+| PartiQL | SQL | UNIX
+
+| catlog | catalog | `/<dir>`
+| scope | schema | `/**/<dir>`
+| object | object | `/**/<file>`
+| path | SQL-path | PATH
+| CURRENT_SCOPE | - | `pwd`
+| CURRENT_CATALOG | - | `echo $(pwd) \| cut -d/ -f2`
+| CURRENT_PATH | - | `echo $PATH`
+| USE SCOPE <name> | - | `cd <name> && export PATH=...`
+| USE CATALOG <name> | USE CATALOG* | `cd /<name> && export PATH=...`
+| USE SCHEMA <name> | USE SCHEMA* |  `cd /$CURRENT_CATALOG/<name> && export PATH=...`
+| SET SCOPE <name> | ... | `cd <name>`
+| SET PATH <path> | ... | `export PATH=<path>`
+
+|===
+
+NOTE: * These are not in the SQL-99 standard, but are ubiquitus in industry.
+
+NOTE: A _PartiQL-system_ can execute introspective queries (i.e. INFORMATION_SCHEMA) but that is out-of-scope.
+
+=== Examples
+
+> PLACEHOLDER
+
+== Reference-Level Explanation
+
+> PLACEHOLDER
+
+// This is the technical portion of the RFC, and may be omitted for specification change proposals.
+
+// Explain the design in sufficient detail that:
+
+// * Its interaction with other features is clear.
+// * It is reasonably clear how the feature or API would be implemented.
+// * Corner cases are dissected by example.
+
+// The section should return to the examples given in the previous section, and explain more fully how the detailed proposal makes those examples work.
+
+== Drawbacks
+
+> PLACEHOLDER
+
+// Why should we _not_ do this?
+
+== Rationale and Alternatives
+
+> PLACEHOLDER — Discuss SQL and UNIX compatibility
+
+// * Why is this design/proposal the best in the space of possible designs?
+// * Which other designs/proposals have been considered, and what is the rationale for not choosing them?
+// * What is the impact of not doing this?
+
+== Prior Art
+
+> PLACEHOLDER
+
+// Discuss prior art, both the good and the bad, in relation to this proposal. A few examples of what this can include are:
+
+// * For specification proposals: Does this feature exist in any ISO SQL standard or other SQL dialects?
+// * For API changes: Do similar APIs exist in libraries such as Calcite? What are some details of the specific implementation?
+// * Papers: Are there any published papers or great posts that discuss this? If you have some relevant papers to refer to, this can serve as a more detailed theoretical background.
+
+// This section is intended to encourage you, as an author, to think about the lessons from other SQL dialects; provide readers of your RFC with a fuller picture. If there is no prior art, that is fine — your ideas are interesting to us whether they are brand new or if it is an adaptation from other dialects and implementations.
+
+// Note that while precedent set by other dialects and libraries is some motivation, it does not on its own motivate an RFC.
+
+== Unresolved Questions
+
+> PLACEHOLDER
+
+// * What parts of the design do you expect to resolve through the RFC process before this gets merged?
+// * What parts of the design do you expect to resolve through the implementation of this feature before stabilization?
+// * What related issues do you consider out of scope for this RFC that could be addressed in the future independently of the solution that comes out of this RFC?
+
+== Future Possibilities
+
+> PLACEHOLDER
+
+=== Future RFCs
+
+* PartiQL-session
+
+// Think about what the natural extension and evolution of your proposal would be and how it would affect the language and project as a whole in a holistic way. Try to use this section as a tool to more fully consider all possible interactions with the project and language in your proposal. Also consider how this all fits into the roadmap for the project.
+
+// This is also a good place to "dump ideas", if they are out of scope for the RFC you are writing but otherwise related.
+
+// If you have tried and cannot think of any future possibilities, you may simply state that you cannot think of anything.
+
+// Note that having something written down in the future-possibilities section is not a reason to accept the current or a future RFC; such notes should be in the section on motivation or rationale in this or subsequent RFCs. The section merely provides additional information.
+
+//===========================================
+//===========================================
+//
+//            END OF DOCUMENT
+//
+
+// Notes
+//  * In SQL .. schema names are unique within catalogs.
+//  * A catalog is a named collection of SQL-schemas, foreign server descriptors, and foreign data wrapper descriptors in an SQL-environment. The mechanisms for creating and destroying catalogs are implementation-defined.
+//  * The default catalog is implementation-defined and can be changed by using SET catalog.
+//
+//===========================================
+//===========================================
