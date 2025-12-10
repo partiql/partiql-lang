@@ -1,0 +1,144 @@
+[[sec:type-system-ion-integration]]
+=== Type System and Ion Integration
+
+PartiQL's type system is designed to be compatible with Amazon Ion's type system, enabling seamless integration with Ion data.
+
+==== Ion Type Mapping
+
+PartiQL types map directly to Ion types:
+
+[cols="2,2,3", options="header"]
+|===
+|PartiQL Type |Ion Type |Notes
+
+|NULL
+|null
+|Direct mapping
+
+|BOOLEAN
+|bool
+|Direct mapping
+
+|Integer types
+|int
+|Ion int is arbitrary precision
+
+|DECIMAL
+|decimal
+|Ion decimal is arbitrary precision
+
+|FLOAT/DOUBLE
+|float
+|Ion float is IEEE 754 binary64
+
+|STRING/VARCHAR
+|string
+|Direct mapping
+
+|SYMBOL
+|symbol
+|Ion-specific: interned strings
+
+|TIMESTAMP
+|timestamp
+|Ion timestamp with arbitrary precision
+
+|BLOB
+|blob
+|Direct mapping
+
+|CLOB
+|clob
+|Direct mapping
+
+|TUPLE/STRUCT
+|struct
+|Direct mapping
+
+|ARRAY
+|list
+|Ion lists are equivalent to PartiQL arrays
+
+|BAG
+|bag (not native)
+|Represented as list with bag semantics
+|===
+
+==== Ion Literals in PartiQL
+
+PartiQL supports Ion literal syntax using backtick quotation:
+
+*EBNF Syntax:*
+[source, ebnf]
+----
+ion_literal = "`", ion_value, "`" ;
+
+ion_value = ? Any valid Ion value ? ;
+----
+
+*Examples:*
+[source, partiql]
+----
+`null`                               -- Ion null
+`true`                               -- Ion bool
+`42`                                 -- Ion int
+`3.14159265358979323846d`           -- Ion decimal (arbitrary precision)
+`2023-12-25T14:30:00.123456Z`       -- Ion timestamp
+`"Hello, Ion!"`                     -- Ion string
+`'symbol'`                           -- Ion symbol
+`{a: 1, b: 2}`                      -- Ion struct
+`[1, 2, 3]`                         -- Ion list
+`{{ DEADBEEF }}`                    -- Ion blob
+----
+
+==== Type Annotations
+
+Ion supports type annotations, which are preserved in PartiQL when using Ion literals:
+
+*Examples:*
+[source, partiql]
+----
+`dollars::100.00`                    -- Annotated decimal
+`coordinates::{x: 10, y: 20}`       -- Annotated struct
+`rgb::[255, 128, 0]`                -- Annotated list
+----
+
+==== Benefits of Ion Integration
+
+1. *Arbitrary Precision*: Ion's arbitrary precision integers and decimals available in PartiQL
+2. *Rich Timestamps*: Ion timestamps preserve timezone and fractional seconds
+3. *Efficient Symbols*: Interned strings for repeated values
+4. *Type Annotations*: Domain-specific type information preserved
+5. *Binary Format*: Efficient binary encoding for Ion data
+6. *Self-Describing*: Ion format includes type information
+
+==== SQL vs. Ion Literals
+
+PartiQL accepts both SQL-style literals and Ion literals:
+
+[cols="2,2,2", options="header"]
+|===
+|Value |SQL Literal |Ion Literal
+
+|String
+|`'hello'`
+|`` `"hello"` ``
+
+|Integer
+|`42`
+|`` `42` ``
+
+|Decimal
+|`3.14`
+|`` `3.14d` ``
+
+|Timestamp
+|`TIMESTAMP '2023-12-25'`
+|`` `2023-12-25T` ``
+
+|Null
+|`NULL`
+|`` `null` ``
+|===
+
+For maximum compatibility and precision, Ion literals (using backticks) are recommended when working with Ion data sources.
