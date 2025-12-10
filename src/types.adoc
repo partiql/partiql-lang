@@ -1,0 +1,821 @@
+[[sec:data-types]]
+== Data Types
+
+PartiQL supports a rich type system that extends SQL's type system to accommodate semi-structured and nested data. The type system is designed to be compatible with both SQL's traditional scalar types and Ion's comprehensive type system, enabling PartiQL to work seamlessly with both relational and document-oriented data.
+
+[[sec:numeric-types]]
+=== Numeric Types
+
+PartiQL supports a comprehensive set of numeric types, ranging from exact integers to arbitrary-precision decimals and IEEE 754 floating-point numbers.
+
+==== Integer Types
+
+*Signed Integers:*
+
+[cols="1,1,3", options="header"]
+|===
+|Type |Bit Size |Range
+
+|`INT8` / `TINYINT`
+|8 bits
+|-128 to 127
+
+|`INT16` / `SMALLINT`
+|16 bits
+|-32,768 to 32,767
+
+|`INT32` / `INT` / `INTEGER`
+|32 bits
+|-2,147,483,648 to 2,147,483,647
+
+|`INT64` / `BIGINT`
+|64 bits
+|-9,223,372,036,854,775,808 to 9,223,372,036,854,775,807
+|===
+
+*EBNF Syntax for Integer Literals:*
+[source, ebnf]
+----
+integer_literal = [ "+" | "-" ], digit, { digit } ;
+digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+----
+
+*Examples:*
+[source, partiql]
+----
+42
+-128
+----
+
+==== Decimal Types
+
+Decimal types provide exact numeric representation, essential for financial calculations where rounding errors are unacceptable.
+
+[cols="1,1,3", options="header"]
+|===
+|Type |Bit Size |Description
+
+|`DECIMAL(p)` / `DEC(p)`
+|Variable
+|Exact numeric with precision p (total digits)
+
+|`DECIMAL(p,s)` / `DEC(p,s)`
+|Variable
+|Exact numeric with precision p and scale s (digits after decimal point)
+
+|`NUMERIC(p,s)`
+|Variable
+|Synonym for DECIMAL(p,s)
+
+|`DECIMAL` (arbitrary precision)
+|Variable
+|Arbitrary precision decimal
+|===
+
+*EBNF Syntax for Decimal Literals:*
+[source, ebnf]
+----
+decimal_literal = [ "+" | "-" ], digit, { digit }, ".", { digit },
+                  [ "d" | "D" ], [ integer_literal ] ;
+----
+
+*Examples:*
+[source, partiql]
+----
+123.45
+-0.001
+3.14159265358979323846d     -- arbitrary precision
+999.999999999999999999999d   -- arbitrary precision
+----
+
+==== Floating-Point Types
+
+Floating-point types follow IEEE 754 standards for binary floating-point arithmetic.
+
+[cols="1,1,3", options="header"]
+|===
+|Type |Bit Size |Description
+
+|`REAL` / `FLOAT(p)` where p ≤ 24
+|32 bits
+|IEEE 754 binary32 single-precision
+
+|`DOUBLE PRECISION` / `FLOAT` / `FLOAT(p)` where p > 24
+|64 bits
+|IEEE 754 binary64 double-precision
+|===
+
+*Special Values:*
+
+* `+inf` / `inf` - Positive infinity
+* `-inf` - Negative infinity  
+* `nan` - Not a Number
+
+*EBNF Syntax for Float Literals:*
+[source, ebnf]
+----
+float_literal = [ "+" | "-" ], 
+                ( digit, { digit }, ".", { digit }, [ exponent ]
+                | digit, { digit }, exponent
+                | "inf" 
+                | "nan" ),
+                [ "e" | "E" ] ;
+
+exponent = ( "e" | "E" ), [ "+" | "-" ], digit, { digit } ;
+----
+
+*Examples:*
+[source, partiql]
+----
+3.14e0
+-2.5e-10
+6.022e23
+inf
+-inf
+nan
+----
+
+[[sec:character-types]]
+=== Character Types (Text/String Types)
+
+PartiQL supports text data using Unicode character strings. String types are variable-length and can represent text in any Unicode encoding.
+
+[cols="1,1,3", options="header"]
+|===
+|Type |Bit Size |Description
+
+|`CHARACTER(n)` / `CHAR(n)`
+|Variable (≥ n characters)
+|Fixed-length character string of exactly n characters
+
+|`CHARACTER VARYING(n)` / `VARCHAR(n)`
+|Variable (≤ n characters)
+|Variable-length character string with maximum length n
+
+|`STRING`
+|Variable (unlimited)
+|Variable-length character string with no specified maximum
+|===
+
+*Character Encoding:*
+- Strings are Unicode character sequences
+- Internal representation is implementation-defined (UTF-8, UTF-16, etc.)
+- Each character is a Unicode code point (21 bits effective range: U+0000 to U+10FFFF)
+
+*EBNF Syntax for String Literals:*
+[source, ebnf]
+----
+string_literal = "'", { string_character | escaped_character }, "'" ;
+
+string_character = ? any Unicode character except quotes and backslash ? ;
+
+escaped_character = "\", ( "'" | '"' | "\" | "/" | "n" | "r" | "t" 
+                  | "b" | "f" 
+                  | "u", hex_digit, hex_digit, hex_digit, hex_digit
+                  | "U", hex_digit, { hex_digit } ) ;
+
+hex_digit = digit | "a" | "b" | "c" | "d" | "e" | "f"
+          | "A" | "B" | "C" | "D" | "E" | "F" ;
+----
+
+TODO: Check this.
+
+*Examples:*
+[source, partiql]
+----
+'Hello, World!'
+'Unicode: \u03B1\u03B2\u03B3'  -- Greek letters αβγ
+'Escaped quote: \' and backslash: \\'
+----
+
+[[sec:timestamp-types]]
+=== Datetime Types
+
+PartiQL supports temporal data types for representing dates, times, and timestamps with varying levels of precision.
+
+[cols="1,1,3", options="header"]
+|===
+|Type |Bit Size |Description
+
+|`DATE`
+|32-64 bits (implementation-defined)
+|Calendar date (year, month, day)
+
+|`TIME` / `TIME(p)`
+|32-64 bits (implementation-defined)
+|Time of day with optional precision p (fractional seconds)
+
+|`TIMESTAMP` / `TIMESTAMP(p)`
+|64-128 bits (implementation-defined)
+|Date and time with optional precision p and optional timezone
+
+|`TIMESTAMP WITH TIME ZONE`
+|64-128 bits (implementation-defined)
+|Timestamp with explicit timezone information
+|===
+
+*Precision:*
+- Precision p specifies the number of fractional second digits (0-9)
+- Default precision is implementation-defined (typically 6 for microseconds)
+
+TODO: Remove Ion syntax below. Replace with SQL syntax.
+*EBNF Syntax for Timestamp Literals:*
+[source, ebnf]
+----
+date_literal = "`", year, "-", month, "-", day, "`" ;
+
+time_literal = "`", hour, ":", minute, ":", second, [ ".", fraction ], 
+               [ timezone ], "`" ;
+
+timestamp_literal = "`", year, "-", month, "-", day, 
+                    "T", hour, ":", minute, ":", second, 
+                    [ ".", fraction ], [ timezone ], "`" ;
+
+year = digit, digit, digit, digit ;
+month = "0", digit | "1", ( "0" | "1" | "2" ) ;
+day = ( "0" | "1" | "2" ), digit | "3", ( "0" | "1" ) ;
+hour = ( "0" | "1" ), digit | "2", ( "0" | "1" | "2" | "3" ) ;
+minute = ( "0" | "1" | "2" | "3" | "4" | "5" ), digit ;
+second = ( "0" | "1" | "2" | "3" | "4" | "5" ), digit ;
+fraction = digit, { digit } ;
+timezone = "Z" | ( "+" | "-" ), hour, ":", minute ;
+----
+
+*Examples:*
+[source, partiql]
+----
+`2023-12-25`                           -- DATE
+`14:30:00`                             -- TIME
+`2023-12-25T14:30:00Z`                 -- TIMESTAMP (UTC)
+`2023-12-25T14:30:00.123456-08:00`     -- TIMESTAMP with microseconds and timezone
+`2016-08-03T08:56:52.415Z`             -- TIMESTAMP from Ion
+----
+
+[[sec:boolean-type]]
+=== Boolean Type
+
+The boolean type represents logical truth values.
+
+[cols="1,1,3", options="header"]
+|===
+|Type |Bit Size |Description
+
+|`BOOLEAN` / `BOOL`
+|1 bit (typically 8 bits storage)
+|Logical truth value: TRUE or FALSE
+|===
+
+*EBNF Syntax for Boolean Literals:*
+[source, ebnf]
+----
+boolean_literal = TRUE | FALSE ;
+----
+
+*Note on NULL:* While SQL's three-valued logic includes TRUE, FALSE, and NULL, in PartiQL NULL is treated as an absent value (see <<sec:absent-values>>), not as a boolean value.
+
+*Examples:*
+[source, partiql]
+----
+TRUE
+false
+1 > 0        -- evaluates to TRUE
+'a' = 'b'    -- evaluates to FALSE
+----
+
+[[sec:binary-types]]
+=== Binary Types (LOB Types)
+
+PartiQL supports binary large object (LOB) types for storing raw binary data.
+
+[cols="1,1,3", options="header"]
+|===
+|Type |Bit Size |Description
+
+|`BLOB`
+|Variable (unlimited)
+|Binary Large Object - raw binary data
+
+|`CLOB`
+|Variable (unlimited)
+|Character Large Object - large text data
+
+|`BINARY(n)` / `VARBINARY(n)`
+|Variable (≤ n bytes)
+|Binary data with maximum length n bytes
+|===
+
+*EBNF Syntax for Binary Literals:*
+[source, ebnf]
+----
+blob_literal = "{{", { { hex_digit, hex_digit } }, "}}" ;
+
+clob_literal = "{{", '"', { clob_character | escaped_character }, '"', "}}" ;
+
+clob_character = ? any Unicode character except quotes and backslash ? ;
+----
+
+*Examples:*
+[source, partiql]
+----
+{{ 48656C6C6F }}              -- BLOB: "Hello" in hex
+{{ "This is a CLOB" }}         -- CLOB
+{{ DEADBEEF }}                 -- BLOB: 4 bytes
+----
+
+[[sec:tuple-struct-types]]
+=== Tuple/Struct Types
+
+Tuples (also called structs) are unordered or ordered collections of attribute-value pairs, where each attribute has a name (string) and an associated value of any PartiQL type.
+
+[cols="1,1,3", options="header"]
+|===
+|Type |Bit Size |Description
+
+|`STRUCT` / `TUPLE`
+|Variable
+|Collection of named attribute-value pairs
+|===
+
+*EBNF Syntax for Tuple Constructors:*
+[source, ebnf]
+----
+tuple_value = "{", [ attribute_pair, { ",", attribute_pair } ], "}" ;
+
+attribute_pair = attribute_name, ":", value ;
+
+attribute_name = string_literal 
+               | identifier 
+               | "(" expression ")" ;
+
+identifier = letter, { letter | digit | "_" | "$" }
+           | '"', quoted_identifier_body, '"' ;
+----
+
+*Storage:* Variable size depending on:
+- Number of attributes
+- Names of attributes (string length)
+- Types and values of attribute values
+- Ordering information (if ordered tuple)
+
+*Examples:*
+[source, partiql]
+----
+{}                                    -- empty tuple
+{'a': 1, 'b': 2}                     -- simple tuple
+{'name': 'John', 'age': 30, 'active': true}
+{'nested': {'x': 1, 'y': 2}}         -- nested tuple
+----
+
+[[sec:ordered-vs-unordered-tuples]]
+==== Ordered vs. Unordered Tuples
+
+PartiQL distinguishes between ordered and unordered tuples, though the distinction is typically determined by schema rather than syntax.
+
+*Unordered Tuples:*
+- Default behavior in schema-less contexts
+- Attribute order is not significant
+- `{'a': 1, 'b': 2}` equals `{'b': 2, 'a': 1}`
+- Attribute access by name only
+
+*Ordered Tuples:*
+- Specified by schema
+- Attribute order is significant and preserved
+- Positional access may be available (implementation-defined)
+- SQL tables with defined column order produce ordered tuples
+- Attribute order affects iteration and certain operations
+
+*Schema Declaration:*
+[source, sql]
+----
+-- Ordered tuple (via SQL table definition)
+CREATE TABLE users (
+    id INT,
+    name VARCHAR(100),
+    email VARCHAR(255)
+)
+
+-- Results in ordered tuples: {'id': _, 'name': _, 'email': _}
+----
+
+[[sec:attribute-names-and-values]]
+==== Attribute Names and Values
+
+*Attribute Names:*
+- Must be strings (any Unicode string)
+- Can be identifiers or quoted strings
+- Can be computed dynamically using expressions
+- Case-sensitive by default (implementation may vary)
+
+*Attribute Values:*
+- Can be any PartiQL type (scalars, collections, tuples)
+- Can be NULL (but not MISSING - see special handling below)
+- Fully heterogeneous: different tuples can have different value types for same attribute name
+
+*MISSING Attributes:*
+When constructing tuples, if an attribute value evaluates to `MISSING`, the attribute is omitted entirely from the tuple rather than being included with a MISSING value.
+
+*Examples:*
+[source, partiql]
+----
+-- Dynamic attribute names
+{('prefix_' || 'name'): 'value'}      -- {'prefix_name': 'value'}
+
+-- Heterogeneous values
+{'x': 1}                               -- x is integer
+{'x': 'hello'}                         -- x is string (different tuple)
+
+-- MISSING handling
+{'a': 1, 'b': MISSING}                 -- Results in: {'a': 1}
+----
+
+[[sec:duplicate-attribute-names]]
+==== Duplicate Attribute Names
+
+PartiQL allows duplicate attribute names within tuples for compatibility with non-strict JSON/Ion datasets, though this is not encouraged.
+
+*Behavior with Duplicates:*
+- Tuples may contain multiple attributes with the same name
+- Path navigation `t.attr` returns the *first* occurrence (for ordered tuples) or an implementation-defined occurrence (for unordered tuples)
+- Deep equality compares all attributes, including duplicates
+- `UNPIVOT` can access all occurrences
+
+*Ordered Tuples:* First occurrence is well-defined based on schema-defined order.
+
+*Unordered Tuples:* First occurrence is implementation-defined in permissive mode, error in type-checking mode.
+
+*Examples:*
+[source, partiql]
+----
+{'a': 1, 'a': 2}                      -- Tuple with duplicate 'a'
+{'a': 1, 'a': 2}.a                    -- Returns 1 (first occurrence)
+
+-- Access all values using UNPIVOT
+SELECT VALUE v
+FROM UNPIVOT {'a': 1, 'a': 2, 'b': 3} AS v AT attr
+WHERE attr = 'a'
+-- Returns: <<1, 2>>
+----
+
+[[sec:collection-types]]
+=== Collection Types
+
+PartiQL supports two fundamental collection types: arrays (ordered) and bags (unordered). Both can contain elements of any PartiQL type and allow duplicates.
+
+[[sec:arrays]]
+==== Arrays
+
+Arrays are ordered collections where elements are accessible by zero-based index.
+
+[cols="1,1,3", options="header"]
+|===
+|Type |Bit Size |Description
+
+|`ARRAY`
+|Variable
+|Ordered, indexed collection allowing duplicates
+|===
+
+*EBNF Syntax for Array Constructors:*
+[source, ebnf]
+----
+array_value = "[", [ value, { ",", value } ], "]" ;
+----
+
+*Characteristics:*
+- *Ordered*: Element order is significant and preserved
+- *Indexed*: Elements accessible by zero-based integer index
+- *Size*: Has explicit size (number of elements)
+- *Duplicates*: Multiple elements with same value allowed
+- *Heterogeneous*: Elements can have different types
+
+*Storage:* Variable size depending on:
+- Number of elements
+- Types and sizes of element values
+- Indexing metadata
+
+*Examples:*
+[source, partiql]
+----
+[]                                    -- empty array
+[1, 2, 3, 4, 5]                      -- array of integers
+['a', 'b', 'c']                      -- array of strings
+[1, 'two', 3.0, true]                -- heterogeneous array
+[[1, 2], [3, 4]]                     -- nested arrays
+[{'a': 1}, {'b': 2}]                 -- array of tuples
+----
+
+*Array Access:*
+[source, partiql]
+----
+[1, 2, 3][0]                         -- Returns: 1
+[1, 2, 3][2]                         -- Returns: 3
+[1, 2, 3][10]                        -- Returns: MISSING (out of bounds)
+----
+
+[[sec:bags]]
+==== Bags
+
+Bags are unordered collections where elements are not accessible by position.
+
+[cols="1,1,3", options="header"]
+|===
+|Type |Bit Size |Description
+
+|`BAG`
+|Variable
+|Unordered collection allowing duplicates
+|===
+
+*EBNF Syntax for Bag Constructors:*
+[source, ebnf]
+----
+bag_value = "<<", [ value, { ",", value } ], ">>" ;
+----
+
+*Characteristics:*
+- *Unordered*: Element order is not significant
+- *No Indexing*: Elements not accessible by position
+- *Duplicates*: Multiple elements with same value allowed  
+- *Heterogeneous*: Elements can have different types
+- *SQL Compatibility*: SQL tables are bags of tuples
+
+*Storage:* Variable size depending on:
+- Number of elements
+- Types and sizes of element values
+- No ordering metadata needed
+
+*Examples:*
+[source, partiql]
+----
+<<>>                                 -- empty bag
+<<1, 2, 3, 2, 1>>                    -- bag with duplicates
+<<'a', 'b', 'c'>>                    -- bag of strings
+<<1, 'two', 3.0, true>>              -- heterogeneous bag
+<<{'a': 1}, {'b': 2}>>               -- bag of tuples (like SQL table)
+----
+
+*Bag Equality:*
+[source, partiql]
+----
+<<1, 2, 3>> = <<3, 2, 1>>            -- TRUE (order doesn't matter)
+<<1, 2, 2>> = <<1, 2>>               -- FALSE (duplicates count)
+<<1, 2, 3>> = [1, 2, 3]              -- FALSE (different types)
+----
+
+[[sec:absent-values]]
+=== Absent Values (NULL and MISSING)
+
+PartiQL has two kinds of absent values to distinguish between null-valued data and missing data, enabling better handling of semi-structured data.
+
+[cols="1,1,3", options="header"]
+|===
+|Type |Bit Size |Description
+
+|`NULL`
+|Implementation-defined (typically 1 bit + tag)
+|Explicit null value (SQL null)
+
+|`MISSING`
+|Implementation-defined (typically 1 bit + tag)
+|Absent/undefined value (not present in data)
+|===
+
+*EBNF Syntax:*
+[source, ebnf]
+----
+absent_value = "NULL" | "null" | "MISSING" ;
+----
+
+==== NULL
+
+`NULL` represents an explicit null value, compatible with SQL's NULL semantics.
+
+*Characteristics:*
+- Explicit presence of unknown/inapplicable value
+- Can be stored as attribute value in tuples
+- Participates in SQL three-valued logic
+- `NULL = NULL` is not TRUE (returns NULL in SQL semantics)
+
+*Examples:*
+[source, partiql]
+----
+{'a': 1, 'b': NULL}                  -- tuple with explicit NULL
+[1, NULL, 3]                         -- array with NULL element
+NULL + 5                             -- Returns: NULL
+NULL > 0                             -- Returns: NULL (or false in boolean context)
+----
+
+==== MISSING
+
+`MISSING` represents the absence of data, typical in semi-structured data where attributes may not exist.
+
+*Characteristics:*
+- Indicates data is not present
+- *Cannot* be stored as attribute value in tuples (omitted instead)
+- Can appear in arrays and bags
+- Path navigation to non-existent attribute returns MISSING
+- Operations on MISSING typically return MISSING
+
+*Examples:*
+[source, partiql]
+----
+{'a': 1}.b                           -- Returns: MISSING
+[1, MISSING, 3]                      -- Array with MISSING element
+{'a': 1, 'b': MISSING}               -- Becomes: {'a': 1} (b omitted)
+MISSING + 5                          -- Returns: MISSING
+----
+
+==== NULL vs. MISSING
+
+*Key Differences:*
+
+[cols="2,3,3", options="header"]
+|===
+|Aspect |NULL |MISSING
+
+|Origin
+|Explicit null in data
+|Absent/non-existent data
+
+|In Tuples
+|Can be attribute value
+|Causes attribute to be omitted
+
+|In Arrays/Bags
+|Valid element
+|Valid element
+
+|Equality
+|NULL = NULL is NULL (SQL) / eqg(NULL, NULL) is TRUE (grouping)
+|MISSING = MISSING is MISSING / eqg(MISSING, MISSING) is TRUE (grouping)
+
+|Grouping
+|NULLs group together
+|MISSINGs group with NULLs (coerced to NULL)
+
+|Path Result
+|Explicit null value stored
+|Navigation to non-existent path
+|===
+
+*Examples:*
+[source, partiql]
+----
+-- Distinction preserved
+{'a': NULL}                          -- Has 'a' attribute with NULL value
+{'b': 1}                             -- Lacks 'a' attribute (MISSING)
+
+-- Both in array
+[NULL, MISSING, 1]                   -- Array with both absent types
+
+-- Grouping behavior
+SELECT g 
+FROM [{'x': NULL}, {'x': MISSING}, {}] AS t
+GROUP BY t.x GROUP AS g
+-- Results in one group: both NULL and MISSING group together
+----
+
+[[sec:type-system-ion-integration]]
+=== Type System and Ion Integration
+
+PartiQL's type system is designed to be compatible with Amazon Ion's type system, enabling seamless integration with Ion data.
+
+==== Ion Type Mapping
+
+PartiQL types map directly to Ion types:
+
+[cols="2,2,3", options="header"]
+|===
+|PartiQL Type |Ion Type |Notes
+
+|NULL
+|null
+|Direct mapping
+
+|BOOLEAN
+|bool
+|Direct mapping
+
+|Integer types
+|int
+|Ion int is arbitrary precision
+
+|DECIMAL
+|decimal
+|Ion decimal is arbitrary precision
+
+|FLOAT/DOUBLE
+|float
+|Ion float is IEEE 754 binary64
+
+|STRING/VARCHAR
+|string
+|Direct mapping
+
+|SYMBOL
+|symbol
+|Ion-specific: interned strings
+
+|TIMESTAMP
+|timestamp
+|Ion timestamp with arbitrary precision
+
+|BLOB
+|blob
+|Direct mapping
+
+|CLOB
+|clob
+|Direct mapping
+
+|TUPLE/STRUCT
+|struct
+|Direct mapping
+
+|ARRAY
+|list
+|Ion lists are equivalent to PartiQL arrays
+
+|BAG
+|bag (not native)
+|Represented as list with bag semantics
+|===
+
+==== Ion Literals in PartiQL
+
+PartiQL supports Ion literal syntax using backtick quotation:
+
+*EBNF Syntax:*
+[source, ebnf]
+----
+ion_literal = "`", ion_value, "`" ;
+
+ion_value = ? Any valid Ion value ? ;
+----
+
+*Examples:*
+[source, partiql]
+----
+`null`                               -- Ion null
+`true`                               -- Ion bool
+`42`                                 -- Ion int
+`3.14159265358979323846d`           -- Ion decimal (arbitrary precision)
+`2023-12-25T14:30:00.123456Z`       -- Ion timestamp
+`"Hello, Ion!"`                     -- Ion string
+`'symbol'`                           -- Ion symbol
+`{a: 1, b: 2}`                      -- Ion struct
+`[1, 2, 3]`                         -- Ion list
+`{{ DEADBEEF }}`                    -- Ion blob
+----
+
+==== Type Annotations
+
+Ion supports type annotations, which are preserved in PartiQL when using Ion literals:
+
+*Examples:*
+[source, partiql]
+----
+`dollars::100.00`                    -- Annotated decimal
+`coordinates::{x: 10, y: 20}`       -- Annotated struct
+`rgb::[255, 128, 0]`                -- Annotated list
+----
+
+==== Benefits of Ion Integration
+
+1. *Arbitrary Precision*: Ion's arbitrary precision integers and decimals available in PartiQL
+2. *Rich Timestamps*: Ion timestamps preserve timezone and fractional seconds
+3. *Efficient Symbols*: Interned strings for repeated values
+4. *Type Annotations*: Domain-specific type information preserved
+5. *Binary Format*: Efficient binary encoding for Ion data
+6. *Self-Describing*: Ion format includes type information
+
+==== SQL vs. Ion Literals
+
+PartiQL accepts both SQL-style literals and Ion literals:
+
+[cols="2,2,2", options="header"]
+|===
+|Value |SQL Literal |Ion Literal
+
+|String
+|`'hello'`
+|`` `"hello"` ``
+
+|Integer
+|`42`
+|`` `42` ``
+
+|Decimal
+|`3.14`
+|`` `3.14d` ``
+
+|Timestamp
+|`TIMESTAMP '2023-12-25'`
+|`` `2023-12-25T` ``
+
+|Null
+|`NULL`
+|`` `null` ``
+|===
+
+For maximum compatibility and precision, Ion literals (using backticks) are recommended when working with Ion data sources.

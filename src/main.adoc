@@ -35,6 +35,7 @@ The PartiQL Specification Committee
 include::license.adoc[]
 
 include::introduction.adoc[]
+include::types.adoc[]
 
 include::model.adoc[]
 include::environment.adoc[]

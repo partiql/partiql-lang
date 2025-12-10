@@ -13,8 +13,8 @@
 ## 2. Data Types
    3.1. Numeric Types  
    3.2. Character Types (Text/String Types)  
-   3.3. Timestamp Types  
-   3.4. Boolean Types  
+   3.3. Timestamp Types
+   3.4. Boolean Type
    3.5. Binary Types (LOB Types)  
    3.6. Tuple/Struct Types
    &nbsp;&nbsp;&nbsp;&nbsp;3.6.1. Ordered vs. Unordered Tuples  
