@@ -1,0 +1,81 @@
+
+[[sec:execution-modes]]
+== Execution Modes
+
+PartiQL supports two execution modes that control how the query processor handles type mismatches and schema violations: _permissive mode_ and _type checking mode_. The choice between these modes affects query behavior when operations encounter data that doesn't match expected types or structures.
+
+[[sec:permissive-mode]]
+=== Permissive Mode
+
+In *permissive mode*, PartiQL gracefully handles type mismatches and missing data, enabling queries to succeed even when operating on heterogeneous or incomplete data. This mode is designed for semi-structured and schema-less data sources where flexibility is paramount.
+
+*Characteristics of Permissive Mode:*
+
+* *Missing Value Propagation*: When a path expression navigates to a non-existent attribute or encounters type mismatches, it returns `MISSING` rather than failing. For example, `{'a':1}.b` evaluates to `MISSING`.
+
+* *Type Mismatch Tolerance*: Operations on wrongly typed data return `MISSING` rather than raising errors. For example, applying a numeric function to a string value returns `MISSING`.
+
+* *Coercion for Compatibility*: Scalar values are automatically coerced into singleton collections when needed. For instance, iterating over a scalar value in a `FROM` clause treats it as a bag with a single element.
+
+* *Tuple Construction Flexibility*: When constructing tuples, attributes that evaluate to `MISSING` are omitted from the result. This preserves the distinction between absent attributes and null-valued attributes.
+
+* *Function Behavior*: Functions that receive `MISSING` as input (or inputs of incorrect types) return `MISSING`, except for functions explicitly designed to test for absent values (like `IS MISSING`).
+
+*Example in Permissive Mode:*
+
+[source,partiql]
+----
+SELECT VALUE {'a': v.x, 'b': v.y * 2}
+FROM [{'x': 1, 'y': 2}, {'x': 3}, {'x': 'foo', 'y': 5}] AS v
+----
+
+Results in:
+[source,partiql]
+----
+<< {'a': 1, 'b': 4}, {'a': 3}, {'a': 'foo'} >>
+----
+
+Notice how:
+* The second tuple omits 'b' because `v.y` is `MISSING`
+* The third tuple omits 'b' because `'foo' * 2` returns `MISSING` (type mismatch)
+
+[[sec:type-checking-mode]]
+=== Type Checking Mode
+
+In *type checking mode*, PartiQL enforces strict type checking and fails queries when type mismatches or schema violations occur. This mode is appropriate for traditional databases with rigid schemas or when strict data quality validation is required.
+
+*Characteristics of Type Checking Mode:*
+
+* *Error on Type Mismatch*: Operations on wrongly typed data cause the query to fail with an error rather than returning `MISSING`. For example, attempting to navigate into a scalar value as if it were a tuple will fail.
+
+* *Error on Missing Attributes*: Accessing non-existent attributes causes query failure when the absence can be detected (either at compile-time with schemas or at runtime).
+
+* *Strict Function Application*: Functions receiving inputs of incorrect types cause query failure rather than returning `MISSING`.
+
+* *Schema Requirement*: Type checking mode is most effective when schemas are available, enabling compile-time error detection. Without schemas, many errors can only be detected at runtime.
+
+* *SQL Compatibility*: When operating on data with SQL-style schemas, type checking mode provides behavior identical to SQL's strict typing.
+
+*Example in Type Checking Mode:*
+
+The same query from the permissive mode example would fail in type checking mode when processing the second and third tuples, as:
+* The second tuple lacks the 'y' attribute
+* The third tuple has a string 'x' value where numeric operations are applied
+
+*Choosing Between Modes:*
+
+The choice between permissive and type checking modes depends on the use case:
+
+* Use *permissive mode* for:
+  ** Semi-structured or schema-less data (JSON, Ion)
+  ** Data integration across heterogeneous sources
+  ** Exploratory queries on unfamiliar data
+  ** Resilience to schema evolution
+
+* Use *type checking mode* for:
+  ** Traditional relational databases with fixed schemas
+  ** Strict data quality requirements
+  ** Applications requiring SQL-compatible behavior
+  ** Early error detection during development
+
+Some PartiQL implementations may support mode selection on a per-query basis, while others may set the mode at the session or system level.
