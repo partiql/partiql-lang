@@ -10,37 +10,28 @@
    &nbsp;&nbsp;&nbsp;&nbsp;1.4.1. Permissive Mode  
    &nbsp;&nbsp;&nbsp;&nbsp;1.4.2. Type Checking Mode  
 
-## 2. Data Model
-   2.1. PartiQL Values  
-   2.2. Absent Values (NULL and MISSING)  
-   2.3. Scalar Values  
-   2.4. Complex Values  
-   &nbsp;&nbsp;&nbsp;&nbsp;2.4.1. Tuples  
-   &nbsp;&nbsp;&nbsp;&nbsp;2.4.2. Arrays  
-   &nbsp;&nbsp;&nbsp;&nbsp;2.4.3. Bags  
-   2.5. Comparison to the Relational Model  
-
-## 3. Data Types
+## 2. Data Types
    3.1. Numeric Types  
    3.2. Character Types (Text/String Types)  
    3.3. Timestamp Types  
    3.4. Boolean Types  
    3.5. Binary Types (LOB Types)  
-   3.6. Tuple/Struct Types  
+   3.6. Tuple/Struct Types
    &nbsp;&nbsp;&nbsp;&nbsp;3.6.1. Ordered vs. Unordered Tuples  
    &nbsp;&nbsp;&nbsp;&nbsp;3.6.2. Attribute Names and Values  
    &nbsp;&nbsp;&nbsp;&nbsp;3.6.3. Duplicate Attribute Names  
    3.7. Collection Types  
    &nbsp;&nbsp;&nbsp;&nbsp;3.7.1. Arrays  
-   &nbsp;&nbsp;&nbsp;&nbsp;3.7.2. Bags  
+   &nbsp;&nbsp;&nbsp;&nbsp;3.7.2. Bags
+   3.8. Absent Values (NULL and MISSING)
    3.8. Type System and Ion Integration  
 
-## 4. Type Conversion and Coercion
+## 3. Type Conversion and Coercion
    4.1. Explicit Type Conversion (CAST)  
    4.2. Implicit Type Coercion  
    4.3. Literal Coercion for SQL Compatibility  
 
-## 5. Database Environments
+## 4. Database Environments
    5.1. Binding Tuples and Environments  
    5.2. Database Environment vs. Variables Environment  
    5.3. Qualified Names  
@@ -48,7 +39,7 @@
    &nbsp;&nbsp;&nbsp;&nbsp;5.4.1. Variable Scoping  
    &nbsp;&nbsp;&nbsp;&nbsp;5.4.2. Resolving Naming Conflicts  
 
-## 6. Functions and Operators
+## 5. Functions and Operators
    6.1. Logical Operators  
    6.2. Mathematical Functions and Operators  
    6.3. String Functions and Operators  
@@ -69,7 +60,7 @@
    6.9. Operator Precedence  
    6.10. Handling Functions with Wrong Input Types  
 
-## 7. PartiQL Query Syntax
+## 6. PartiQL Query Syntax
    7.1. Query Structure (SFW Queries)  
    7.2. FROM Clause  
    &nbsp;&nbsp;&nbsp;&nbsp;7.2.1. Ranging Over Collections  
@@ -101,7 +92,7 @@
    &nbsp;&nbsp;&nbsp;&nbsp;7.10.3. EXCEPT (ALL)  
    7.11. WITH Clause (Common Table Expressions)  
 
-## 8. Subqueries and Subquery Coercion
+## 7. Subqueries and Subquery Coercion
    8.1. Scalar Subqueries  
    8.2. Collection Subqueries  
    8.3. Subquery Coercion Rules  
