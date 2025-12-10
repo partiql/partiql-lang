@@ -8,31 +8,159 @@ This document is currently a working draft and subject to change.
 Certain sections are marked as "`work in progress`" (WIP) and will be
 expanded soon.
 
-[discrete]
-=== Audience
+[[sec:document-purpose-and-audience]]
+=== Document Purpose and Audience
 
-This document presents the formal syntax and semantics of PartiQL. It is
-oriented to PartiQL query processor builders who need the full and
-formal detail on PartiQL.
+This document presents the formal syntax and semantics of PartiQL. It serves as the authoritative reference for PartiQL query processor builders who need the full and formal detail on PartiQL implementation. The specification defines the precise behavior of PartiQL queries, including the semantics of each clause, the treatment of data types, and the interaction between different language features.
 
-SQL users who are not interested in the full detail and the complete
-formalism but are interested in learning how PartiQL extends SQL may
-also read the tutorial. Unlike this formal specification, the tutorial
-has a "`how to`" orientation and is primarily driven by examples.
+The primary audience for this specification includes:
 
-[discrete]
-=== PartiQL core and PartiQL syntactic sugar
+* Query processor and database engine developers implementing PartiQL
+* Language designers and standards committee members working on PartiQL evolution
+* Tool developers building query analyzers, optimizers, and validators
+* Advanced users requiring deep understanding of PartiQL semantics
 
-In the interest of precision and succinctness, we tier the PartiQL
-specification in two layers: The PartiQL core is a functional
-programming language with composable aspects. Three aspects of the
-PartiQL core syntax and semantics are characteristic of its functional
-orientation: Every (sub)query and every (sub) expression input and
-output PartiQL data. Second, each clause of a SELECT query is itself a
-function. Third, every (sub)query evaluates within the environment
-created by the database names and the variables of the enclosing
-queries.
+SQL users who are not interested in the full detail and the complete formalism but are interested in learning how PartiQL extends SQL may also read the tutorial. Unlike this formal specification, the tutorial has a "`how to`" orientation and is primarily driven by examples.
 
-Then we layer "`syntactic sugar`" features over the core. Commonly,
-syntactic sugar achieves well-known SQL syntax and semantics. Formally,
-every syntactic sugar feature is explained by reduction to the core.
+[[sec:partiql-core-vs-syntactic-sugar]]
+=== PartiQL Core vs. Syntactic Sugar
+
+In the interest of precision and succinctness, we tier the PartiQL specification in two layers: the _PartiQL core_ and _syntactic sugar_.
+
+The *PartiQL core* is a functional programming language with composable aspects. Three aspects of the PartiQL core syntax and semantics are characteristic of its functional orientation:
+
+1. *Composability*: Every (sub)query and every (sub)expression inputs and outputs PartiQL data. This enables queries to be freely composed and nested.
+
+2. *Functional Clauses*: Each clause of an SFW (SELECT-FROM-WHERE) query is itself a function that transforms data. For example, the `FROM` clause transforms the database environment into a collection of binding tuples, the `WHERE` clause filters binding tuples, and the `SELECT VALUE` clause transforms binding tuples into result values.
+
+3. *Environment-based Evaluation*: Every (sub)query evaluates within an environment created by the database names and the variables of the enclosing queries. This environment-based evaluation provides precise scoping semantics.
+
+Then we layer *syntactic sugar* features over the core. Syntactic sugar provides familiar syntax and conveniences, commonly achieving well-known SQL syntax and semantics. Formally, every syntactic sugar feature is explained by reduction to the core PartiQL. For example:
+
+* SQL's `SELECT` clause is syntactic sugar that reduces to `SELECT VALUE` with tuple construction
+* SQL's aggregation functions (like `SUM`, `AVG`) are syntactic sugar that reduces to core PartiQL collection functions with explicit group variables
+* SQL's `FROM` clause without explicit variables is syntactic sugar for core PartiQL with variable bindings
+
+This two-tier approach provides both precision (through the core) and usability (through syntactic sugar), while maintaining backwards compatibility with SQL.
+
+[[sec:gradual-typing]]
+=== Gradual Typing
+
+PartiQL supports _gradual typing_, which allows data to range from completely untyped (schema-less) to fully typed with structural types (schemas). This flexibility enables PartiQL to work effectively with both traditional relational databases with rigid schemas and modern semi-structured data stores without predefined schemas.
+
+The gradual typing system provides several key benefits:
+
+* *Schema Optional*: Queries can execute successfully with or without schema information
+* *Schema Beneficial*: When schemas are available, they enable compile-time error detection, query optimization, and better tooling support
+* *Stability*: Query results remain stable when schemas are added or modified, maintaining consistent behavior
+
+[[sec:schema-validation]]
+==== Schema Validation
+
+When structural types (schemas) are available, PartiQL can leverage them for validation and optimization. Schema validation in PartiQL:
+
+* *Compile-time Error Detection*: When schema information indicates that a path expression will always return `MISSING` (e.g., referencing a non-existent attribute in a table), the query processor may throw a compile-time error. The extent of error detection is implementation-specific.
+
+* *Type Compatibility Checking*: Schemas enable the query processor to verify type compatibility at compile time. For example, if a schema indicates that an attribute is always numeric, the processor can validate that operations on that attribute are type-appropriate.
+
+* *SQL Compatibility*: In the presence of schema validation that matches SQL's rigid schemas, PartiQL behaves identically to SQL. For instance, referring to a non-existent column in a SQL table will produce a compilation error, just as it does in SQL.
+
+* *Optimization Opportunities*: Schema information enables query optimizers to make better decisions about query execution plans, index usage, and data access patterns.
+
+Schema validation is optional and its availability depends on:
+
+1. Whether the data source provides schema information
+2. Whether the query explicitly references schema information
+3. The implementation's capabilities for schema inference and validation
+
+[[sec:type-inference]]
+==== Type Inference
+
+PartiQL implementations may employ type inference to derive type information even in the absence of explicit schemas. Type inference enables:
+
+* *Partial Type Knowledge*: Even without complete schemas, the query processor can infer types from query structure, literal values, and function signatures
+* *Progressive Refinement*: Type information can be progressively refined as more context becomes available during query compilation and execution
+* *Error Prevention*: Inferred types can help catch certain classes of errors earlier in the query processing pipeline
+
+Type inference in PartiQL is conservative: when type information cannot be reliably inferred, the system defaults to treating values as having union types (capable of being any PartiQL type), maintaining the permissive behavior expected for schema-less data.
+
+[[sec:execution-modes]]
+=== Execution Modes
+
+PartiQL supports two execution modes that control how the query processor handles type mismatches and schema violations: _permissive mode_ and _type checking mode_. The choice between these modes affects query behavior when operations encounter data that doesn't match expected types or structures.
+
+[[sec:permissive-mode]]
+==== Permissive Mode
+
+In *permissive mode*, PartiQL gracefully handles type mismatches and missing data, enabling queries to succeed even when operating on heterogeneous or incomplete data. This mode is designed for semi-structured and schema-less data sources where flexibility is paramount.
+
+*Characteristics of Permissive Mode:*
+
+* *Missing Value Propagation*: When a path expression navigates to a non-existent attribute or encounters type mismatches, it returns `MISSING` rather than failing. For example, `{'a':1}.b` evaluates to `MISSING`.
+
+* *Type Mismatch Tolerance*: Operations on wrongly typed data return `MISSING` rather than raising errors. For example, applying a numeric function to a string value returns `MISSING`.
+
+* *Coercion for Compatibility*: Scalar values are automatically coerced into singleton collections when needed. For instance, iterating over a scalar value in a `FROM` clause treats it as a bag with a single element.
+
+* *Tuple Construction Flexibility*: When constructing tuples, attributes that evaluate to `MISSING` are omitted from the result. This preserves the distinction between absent attributes and null-valued attributes.
+
+* *Function Behavior*: Functions that receive `MISSING` as input (or inputs of incorrect types) return `MISSING`, except for functions explicitly designed to test for absent values (like `IS MISSING`).
+
+*Example in Permissive Mode:*
+
+[source,partiql]
+----
+SELECT VALUE {'a': v.x, 'b': v.y * 2}
+FROM [{'x': 1, 'y': 2}, {'x': 3}, {'x': 'foo', 'y': 5}] AS v
+----
+
+Results in:
+[source,partiql]
+----
+<< {'a': 1, 'b': 4}, {'a': 3}, {'a': 'foo'} >>
+----
+
+Notice how:
+* The second tuple omits 'b' because `v.y` is `MISSING`
+* The third tuple omits 'b' because `'foo' * 2` returns `MISSING` (type mismatch)
+
+[[sec:type-checking-mode]]
+==== Type Checking Mode
+
+In *type checking mode*, PartiQL enforces strict type checking and fails queries when type mismatches or schema violations occur. This mode is appropriate for traditional databases with rigid schemas or when strict data quality validation is required.
+
+*Characteristics of Type Checking Mode:*
+
+* *Error on Type Mismatch*: Operations on wrongly typed data cause the query to fail with an error rather than returning `MISSING`. For example, attempting to navigate into a scalar value as if it were a tuple will fail.
+
+* *Error on Missing Attributes*: Accessing non-existent attributes causes query failure when the absence can be detected (either at compile-time with schemas or at runtime).
+
+* *Strict Function Application*: Functions receiving inputs of incorrect types cause query failure rather than returning `MISSING`.
+
+* *Schema Requirement*: Type checking mode is most effective when schemas are available, enabling compile-time error detection. Without schemas, many errors can only be detected at runtime.
+
+* *SQL Compatibility*: When operating on data with SQL-style schemas, type checking mode provides behavior identical to SQL's strict typing.
+
+*Example in Type Checking Mode:*
+
+The same query from the permissive mode example would fail in type checking mode when processing the second and third tuples, as:
+* The second tuple lacks the 'y' attribute
+* The third tuple has a string 'x' value where numeric operations are applied
+
+*Choosing Between Modes:*
+
+The choice between permissive and type checking modes depends on the use case:
+
+* Use *permissive mode* for:
+  ** Semi-structured or schema-less data (JSON, Ion)
+  ** Data integration across heterogeneous sources
+  ** Exploratory queries on unfamiliar data
+  ** Resilience to schema evolution
+
+* Use *type checking mode* for:
+  ** Traditional relational databases with fixed schemas
+  ** Strict data quality requirements
+  ** Applications requiring SQL-compatible behavior
+  ** Early error detection during development
+
+Some PartiQL implementations may support mode selection on a per-query basis, while others may set the mode at the session or system level.
