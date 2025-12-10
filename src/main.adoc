@@ -12,7 +12,7 @@ The PartiQL Specification Committee
 :sectlinks:
 :sectnumlevels: 5
 :toc: left
-:toclevels: 4
+:toclevels: 3
 :toc-title: Contents
 :pagenums:
 :imagesdir: ../build/images
@@ -38,6 +38,7 @@ include::introduction.adoc[]
 include::gradual_typing.adoc[]
 include::execution_modes.adoc[]
 include::types.adoc[]
+include::type_conversions.adoc[]
 
 include::model.adoc[]
 include::environment.adoc[]
