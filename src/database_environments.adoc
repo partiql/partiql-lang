@@ -1,168 +1,56 @@
-[[sec:database-environments]]
-== Database Environments
+[[sec:environments-and-variables]]
+== Environments and Variables
 
-PartiQL queries are evaluated within environments that provide the context for name resolution and variable binding. Understanding how environments work is essential to understanding PartiQL's semantics, particularly how it extends SQL to support nested data and semi-structured queries.
+PartiQL queries are evaluated within environments that provide the context for name resolution and variable binding. This section explains how PartiQL manages database objects and variables through a two-tier environment system.
 
-[[sec:binding-tuples-and-environments]]
-=== Binding Tuples and Environments
+[[sec:binding-tuples]]
+=== Binding Tuples
 
-Each PartiQL query, subquery, and expression stem:[q] is evaluated within an environment that provides bindings for names and variables. The environment consists of two parts:
+A _binding tuple_ is the fundamental data structure used to represent environments in PartiQL. A binding tuple is a collection of name-value pairs: stem:[<<x_1:v_1,...,x_n:v_n>>], where each stem:[x_i] is a unique name that binds to a value stem:[v_i].
 
-* The *database environment* stem:[p_0] - created by the database names (tables, views, etc.)
-* The *variables environment* stem:[p] - created by the defined query variables (from `FROM`, `LET`, etc.)
+*Key Properties:*
 
-The pair of these environments, stem:[(p_0, p)], is collectively called the *bindings environment*.
+* Similar to PartiQL tuples, but used internally for semantic operations
+* All names within a binding tuple are unique
+* Explicitly represents variables with `MISSING` values rather than omitting them
+  ** Example: stem:[<<x : 1, y: "MISSING">>] instead of stem:[<<x : 1>>]
+  ** This distinction is important: the absence of a variable name differs from a variable whose value is `MISSING`
 
-==== Binding Tuple Structure
+*Binding Tuple Concatenation:*
 
-An environment is represented as a _binding tuple_ stem:[<<x_1:v_1,...,x_n:v_n>>], where:
+Two binding tuples stem:[b] and stem:[b'] can be concatenated as stem:[b||b']:
 
-* Each stem:[x_i] is a _bind name_ that is unique within the environment
-* Each stem:[x_i] binds to a PartiQL _value_ stem:[v_i]
+* The result contains all bindings from both tuples
+* If the same name appears in both, stem:[b']'s binding takes precedence (right argument wins)
+* This operation implements variable shadowing in nested scopes
 
-.EBNF Grammar for PartiQL Names
-[#figure:names:bnf]
-[source%linenums%unbreakable, ebnf]
+.EBNF Grammar for Names
+[source, ebnf]
 ----
-bind_name = global_name
-          | variable ;
+bind_name = global_name | variable ;
 qualified_name = identifier, ".", identifier, { ".", identifier } ;
 variable_name = identifier ;
 identifier = ("$"|"_"|letter), { ("$"|"_"|letter|digit) }
            | '"', ? quoted identifier body ?, '"' ;
 ----
 
-*Key Characteristics:*
+[[sec:database-environment]]
+=== Database Environment
 
-* Binding tuples are similar to PartiQL tuples, with bind names analogous to attribute names
-* Collections of binding tuples are homogeneous - they all have the same "attribute" names
-* Binding tuples explicitly represent variables with `MISSING` values, rather than omitting them
-  ** For example: stem:[<<x : 1, y: "MISSING">>] instead of stem:[<<x : 1>>]
-  ** This is important because the lack of a variable name is distinct from a variable whose value is `MISSING`
+The *database environment* (stem:[p_0]) is analogous to global scope in traditional programming languages. It contains persistent, named database objects that are visible throughout query execution.
 
-==== Type Environments
+==== Contents
 
-At compile time, PartiQL also maintains type environments:
+The database environment includes:
 
-* *Database type environment* stem:[Gamma_0] - associates database names with types
-* *Variables type environment* stem:[Gamma] - associates variables with types
+* *Tables* - relational data collections
+* *Views* - virtual tables defined by queries
+* *Qualified names* - hierarchical names like `catalog.schema.table`
+* *System objects* - built-in functions and metadata tables
 
-A type environment is a binding tuple stem:[<<x_1:tau_1,...,x_n:tau_n>>], where each stem:[x_i] binds to a PartiQL _type_ stem:[tau_i]. For schema-less values, stem:[tau] can be considered the union of any possible type (for which all operations are potentially applicable).
+==== Qualified Names
 
-==== Evaluation in Environment
-
-The notation stem:[(p_0,p) |-- q -> v] denotes that:
-
-* PartiQL query stem:[q] evaluates to value stem:[v]
-* When evaluated in database environment stem:[p_0] and variables environment stem:[p]
-* Every variable of stem:[q] is instantiated by its binding in stem:[p]
-* Each database name is instantiated to its value in stem:[p_0]
-
-.{nbsp}
-[%unbreakable]
-[subs="+normal"]
-====
-*Example:*
-
-Given the query `x + y / 2`, with:
-
-* Database environment: stem:[p_0 = <<x:5>>]
-* Variables environment: stem:[p = <<y:3>>]
-
-Then: stem:[(p_0,p) |-- "(x+y)/2" -> "5+3/2" -> 4]
-====
-
-[[sec:database-vs-variables-environment]]
-=== Database Environment vs. Variables Environment
-
-The separation between database and variables environments serves several important purposes:
-
-==== Database Environment (Global Scope)
-
-The database environment stem:[p_0] contains:
-
-* Database object names (tables, views, etc.)
-* Qualified names (e.g., `mydb.log`, `schema.table`)
-* System-defined names and functions
-* Persistent data references
-
-*Characteristics:*
-
-* Global scope - visible throughout the query
-* Established before query execution begins
-* Contains only qualified or simple names defined by the database
-* Immutable during query execution
-
-.{nbsp}
-[%unbreakable]
-[subs="+normal"]
-====
-*Example:*
-
-[source, partiql]
-----
-SELECT x.resourceId
-FROM mydb.log.configurationItems AS x
-----
-
-Database environment: stem:[p_0 = <<"mydb.log" : { 'fileversion': '1.0', 'configurationItems': ... }>>]
-
-The qualified name `mydb.log` exists in stem:[p_0].
-====
-
-==== Variables Environment (Local Scope)
-
-The variables environment stem:[p] contains:
-
-* Variables defined by `FROM` clauses
-* Variables defined by `LET` clauses
-* Variables defined by `GROUP BY` with `GROUP AS`
-* Nested subquery variables
-
-*Characteristics:*
-
-* Local scope - specific to the query or subquery context
-* Built dynamically as query executes
-* Contains lexically-defined simple identifiers only (no qualified names)
-* Changes as binding tuples flow through query clauses
-
-.{nbsp}
-[%unbreakable]
-[subs="+normal"]
-====
-*Example:*
-
-[source, partiql]
-----
-SELECT x.a AS a
-FROM db1 AS x
-WHERE x.b IN (SELECT x.c FROM db2 AS x)
-----
-
-* Outer query variables environment: stem:[p_"outer" = <<x: ...>>] (from `db1`)
-* Inner query variables environment: stem:[p_"inner" = <<x: ...>>] (from `db2`)
-
-The inner `x` shadows the outer `x` within the subquery.
-====
-
-==== Environment Concatenation
-
-Binding tuples can be concatenated: stem:[b||b']
-
-* The result contains variable bindings from both stem:[b] and stem:[b']
-* If both have the same variable stem:[x], stem:[b'.'x] takes precedence
-* The right argument's bindings shadow the left argument's bindings
-
-This mechanism implements variable scoping: inner query variables shadow outer query variables with the same name.
-
-[[sec:qualified-names]]
-=== Qualified Names
-
-Qualified names enable hierarchical organization of database objects, similar to file system paths.
-
-==== Syntax
-
-A qualified name consists of multiple identifiers separated by dots:
+Qualified names enable hierarchical organization of database objects:
 
 [source, ebnf]
 ----
@@ -171,41 +59,11 @@ qualified_name = identifier, ".", identifier, { ".", identifier } ;
 
 *Examples:*
 
-* `mydb.log` - two-part name
-* `catalog.schema.table` - three-part name
-* `system.information_schema.tables` - three-part name
+* `mydb.users` - database `mydb`, table `users`
+* `catalog.schema.table` - three-part qualified name
+* `system.information_schema.columns` - system catalog access
 
-==== Qualified Names vs. Quoted Identifiers
-
-It's crucial to distinguish:
-
-* *Qualified name:* `mydb.log` - two separate identifiers
-* *Quoted identifier:* `"mydb.log"` - single identifier containing a dot
-
-The qualified name `mydb.log` is distinct from the bind name `"mydb.log"`.
-
-.{nbsp}
-[%unbreakable]
-[subs="+normal"]
-====
-*Example:*
-
-Given a database with:
-
-* A qualified name `mydb.log` (where `mydb` is a schema)
-* A simple name `"mydb.log"` (a single table name with a dot in it)
-
-These refer to different database objects.
-====
-
-==== Usage in Queries
-
-Qualified names *only* appear in the database environment. They enable:
-
-* Schema/database prefixing: `database.schema.table`
-* Namespace organization
-* Cross-database queries
-* SQL compatibility
+IMPORTANT: A qualified name like `mydb.users` is distinct from a quoted identifier `"mydb.users"`. The former is two separate identifiers forming a path; the latter is a single identifier containing a dot character.
 
 .{nbsp}
 [%unbreakable]
@@ -215,24 +73,95 @@ Qualified names *only* appear in the database environment. They enable:
 
 [source, partiql]
 ----
-SELECT x.resourceId
-FROM mydb.log.configurationItems AS x
+SELECT x.id, x.name
+FROM company.hr.employees AS x
+WHERE x.department = 'Engineering'
 ----
 
-* `mydb.log` is a qualified name in the database environment
-* `configurationItems` is tuple path navigation from `mydb.log`
-* `x` is a variable in the variables environment
+The qualified name `company.hr.employees` exists in the database environment stem:[p_0].
 ====
 
-[[sec:scoping-rules]]
-=== Scoping Rules
+==== Modifying the Database Environment
 
-PartiQL's scoping rules determine how name references are resolved, balancing SQL compatibility with support for nested data navigation.
+Only certain DDL (Data Definition Language) commands modify the database environment:
 
-[[sec:variable-scoping]]
-==== Variable Scoping
+* `CREATE TABLE` - adds a new table
+* `CREATE VIEW` - adds a new view
+* `DROP TABLE` / `DROP VIEW` - removes objects
+* `ALTER TABLE` - modifies table structure
 
-As in SQL, inner query variables shadow outer query variables with the same name.
+Query execution (SELECT, INSERT, UPDATE, DELETE) does not modify the database environment—it only reads from stem:[p_0] and modifies data values.
+
+==== Characteristics
+
+* *Global scope* - visible throughout all queries
+* *Persistent* - exists beyond individual query executions
+* *Immutable during queries* - stays constant while a query runs
+* *Established externally* - populated by DDL commands, not by SELECT queries
+
+[[sec:lexical-scoping]]
+=== Lexical Scoping
+
+PartiQL uses *lexical scoping* for variables, where the scope of a variable is determined by its position in the query text. Variables are introduced by specific clauses and are visible within their lexical scope and nested sub-scopes.
+
+==== Variable Declaration
+
+Variables are declared (bound) by several PartiQL clauses:
+
+*FROM Clause*
+
+The `FROM` clause introduces variables that bind to elements from collections:
+
+[source, partiql]
+----
+FROM orders AS o  -- declares variable 'o'
+----
+
+[source, partiql]
+----
+FROM customers AS c, orders AS o  -- declares 'c' and 'o'
+----
+
+*LET Clause*
+
+The `LET` clause introduces variables that bind to computed expressions:
+
+[source, partiql]
+----
+SELECT ...
+FROM orders AS o
+LET o.quantity * o.price AS total  -- declares variable 'total'
+----
+
+*GROUP BY Clause*
+
+The `GROUP BY` clause with `GROUP AS` introduces a variable that binds to the group:
+
+[source, partiql]
+----
+SELECT sensor, COUNT(g) AS reading_count
+FROM logs AS l
+GROUP BY l.sensor AS sensor GROUP AS g  -- declares 'sensor' and 'g'
+----
+
+*AT Clause*
+
+The `AT` clause in `FROM` introduces a variable for array indices or positions:
+
+[source, partiql]
+----
+FROM items AS item AT index  -- declares 'item' and 'index'
+----
+
+==== Scope Rules
+
+*Rule 1: Visibility*
+
+A variable is visible from its point of declaration through the end of its containing query, including:
+
+* Subsequent clauses in the same query
+* Nested subqueries within those clauses
+* Nested expressions
 
 .{nbsp}
 [%unbreakable]
@@ -242,118 +171,90 @@ As in SQL, inner query variables shadow outer query variables with the same name
 
 [source, partiql]
 ----
-SELECT x.a AS a
+SELECT c.name, 
+       (SELECT VALUE o.total 
+        FROM c.orders AS o       -- can access 'c'
+        WHERE o.total > 100) AS large_orders
+FROM customers AS c
+----
+
+Variable `c` (declared in outer `FROM`) is visible in the nested subquery.
+====
+
+*Rule 2: Shadowing*
+
+Inner scopes can declare variables with the same name as outer scopes. The inner declaration *shadows* (hides) the outer one within the inner scope:
+
+.{nbsp}
+[%unbreakable]
+[subs="+normal"]
+====
+*Example:*
+
+[source, partiql]
+----
+SELECT x.a
 FROM db1 AS x
 WHERE x.b IN (SELECT x.c FROM db2 AS x)
 ----
 
-The `x` in `x.c` refers to the inner query's variable (from `db2`), not the outer query's variable (from `db1`).
-
-*Technical Implementation:*
-
-1. Inner `FROM` evaluates with: stem:[p = <<x:...>>] (outer `x`)
-2. Inner `FROM` outputs: stem:[b = <<x:...>>] (inner `x`)
-3. Expression `x.c` evaluates in: stem:[p||b]
-4. Since `x` appears in both, stem:[b]'s `x` takes precedence
+* Outer `x` binds to elements from `db1`
+* Inner `x` binds to elements from `db2`
+* Within the subquery, `x.c` refers to inner `x` (from `db2`)
+* Outside the subquery, `x.b` refers to outer `x` (from `db1`)
 ====
 
-*Concatenation Rule:*
+*Rule 3: Order of Declaration*
 
-Given two binding tuples stem:[b] and stem:[b'], their concatenation stem:[b||b']:
+Variables must be declared before use. Clauses are evaluated in this order:
 
-* Contains bindings from both stem:[b] and stem:[b']
-* If both have variable stem:[x], keeps stem:[b'.x] (right argument wins)
-* Variables in stem:[b'] shadow variables in stem:[b]
+1. `WITH`
+2. `FROM`
+3. `LET`
+4. `WHERE`
+5. `GROUP BY`
+6. `HAVING`
+7. `ORDER BY`
+8. `LIMIT` / `OFFSET`
+9. `SELECT` / `SELECT VALUE` / `PIVOT`
 
-[[sec:resolving-naming-conflicts]]
-==== Resolving Naming Conflicts
+Variables declared in earlier clauses are available in later clauses.
 
-The most complex scoping rules address conflicts between database names and variables. These rules ensure SQL compatibility while supporting nested data.
+==== Technical Implementation
 
-===== Context-Dependent Resolution
+Lexical scoping is implemented through binding tuple concatenation:
 
-Resolution depends on where the identifier appears:
+1. Start with the outer scope's variables: stem:[p]
+2. When entering a new scope with new variables: stem:[b]
+3. Evaluate expressions in concatenated environment: stem:[p||b]
+4. If a name appears in both, stem:[b]'s binding (the inner one) wins
 
-1. *In `FROM` clause:* Database names take priority
-2. *In other clauses:* Variables take priority
-3. *With `@` prefix:* Always refers to variable
+This mechanism naturally implements shadowing: inner variables override outer ones.
 
-===== Basic Rules (Simple Identifiers)
+[[sec:name-resolution]]
+=== Name Resolution
 
-For a simple identifier (not a path):
+*Name resolution* is the process of determining which declaration a name reference refers to. PartiQL's resolution rules balance SQL compatibility with support for nested data navigation.
 
-*Rule 1: `@identifier` (explicit variable reference)*
+==== Unqualified vs. Qualified Names
 
-* Refers to environment variable named `identifier`
-* If no such variable exists, refers to database name `identifier`
-* If neither exists, query fails compilation
+*Unqualified Name*
 
-*Rule 2: `identifier` in `FROM` clause*
+A simple identifier: `x`, `customer`, `total`
 
-* Refers to database name `identifier`
-* If no such database name exists, refers to variable `identifier`
-* If neither exists, query fails compilation
+Resolution depends on context:
 
-*Rule 3: `identifier` in non-`FROM` clause*
+* If a variable with this name exists in scope, resolves to the variable
+* Otherwise, if a database object with this name exists, resolves to the database object
+* Otherwise, compilation error
 
-* Refers to environment variable named `identifier`
-* If no such variable exists, refers to database name `identifier`
-* If neither exists, query fails compilation
+*Qualified Name*
 
-.{nbsp}
-[%unbreakable]
-[subs="+normal"]
-====
-*Example:*
+Multiple identifiers separated by dots: `mydb.users`, `catalog.schema.table`
 
-Given database names `coll`, `v.foo`, `w`:
-
-[source, partiql]
-----
-SELECT v.foo
-FROM coll AS v, @v.foo AS w, 
-     (SELECT w.a, u.b FROM @w.bar AS u) AS x
-----
-
-* `coll` - database name (in `FROM`)
-* `@v.foo` - variable `v` (explicit `@`)
-* `v.foo` without `@` would be database name `v.foo`
-* `w.a` - variable `w` (in `SELECT`, not `FROM`)
-====
-
-===== Extended Rules (Qualified Paths)
-
-For paths stem:[i_1.i_2. ... .i_n]:
-
-*Rule 1: `@i_1.i_2. ... .i_n`*
-
-* Always refers to environment variable stem:[i_1]
-* If no such variable and stem:[i_1.i_2. ... .i_m] (m ≤ n) is a database name
-  ** Refers to that database name
-  ** Choose the longest matching database name
-* If both fail, query fails compilation
-
-*Rule 2: Path in `FROM` clause*
-
-* If stem:[i_1.i_2. ... .i_m] (m ≤ n) is a database name
-  ** stem:[i_1.i_2. ... .i_m] refers to that database name
-  ** stem:[i_{m+1}. ... .i_n] are tuple path navigations from it
-  ** Choose the longest matching database name
-
-*Rule 3: Path in non-`FROM` clause*
-
-* If stem:[i_1] is an environment variable, refers to that variable
-* Otherwise, if stem:[i_1.i_2. ... .i_m] (m ≤ n) is a database name
-  ** Refers to that database name
-  ** Choose the longest matching database name
-* If both fail, query fails compilation
-
-===== FROM Clause vs. Non-FROM Clause
-
-The distinction between `FROM` clause paths and other paths is critical:
-
-* A path is a *FROM clause path* if it appears in the `FROM` clause of the SFW query in which it is *immediately* nested
-* Paths in nested subqueries within a `FROM` clause are not `FROM` clause paths of the outer query
+* Always resolves to database environment (never to variables)
+* Chooses the longest matching database object name
+* Remaining parts are tuple path navigation
 
 .{nbsp}
 [%unbreakable]
@@ -363,79 +264,177 @@ The distinction between `FROM` clause paths and other paths is critical:
 
 [source, partiql]
 ----
-SELECT v.foo
-FROM coll AS v, @v.foo AS w, 
-     (SELECT w.a, u.b FROM @w.bar AS u) AS x
+FROM company.hr.employees AS e
 ----
 
-* `coll` and `@v.foo` are `FROM` clause paths (lines 1-2)
-* `@w.bar` is a `FROM` clause path (line 3, immediately nested in that subquery)
-* `w.a` and `u.b` are *not* `FROM` clause paths (they're in a `SELECT` within the outer `FROM`)
+* `company.hr.employees` is a qualified name
+* Might resolve to database object `company.hr.employees`
+* Or might resolve to `company.hr` with `.employees` as tuple navigation
+* The implementation chooses the longest match that exists in stem:[p_0]
 ====
 
-===== SQL Compatibility Example
+==== The @ Symbol
+
+The `@` symbol forces a name to resolve as a variable, never as a database object:
+
+* `@x` - explicitly refers to variable `x`
+* If no variable `x` exists, falls back to database object `x`
+* Useful when database object names might conflict with variables
 
 .{nbsp}
 [%unbreakable]
 [subs="+normal"]
 ====
-Consider a database with:
+*Example:*
 
-* Table `t.c` (qualified name)
-* Named value `x.n` (qualified name)
-* Named value `y`
+Given database objects `users` and `orders.details`:
 
 [source, partiql]
 ----
-SELECT t.a
-FROM t.c AS x
-WHERE x.a IN (SELECT y.b FROM x.n AS y)
+FROM users AS u, @u.orders AS o
 ----
 
-*Resolution:*
-
-1. `t.c` in `FROM` → database name (not variable)
-2. `x.n` in nested `FROM` → database name `x.n` (not variable `x.n`)
-3. `y.b` in nested `SELECT` → variable `y.b` (not database name `y`)
-
-This ensures SQL compatibility: database names take priority in `FROM` clauses, while variables take priority in other clauses.
+* `users` resolves to database object (in `FROM`)
+* `@u` explicitly refers to variable `u`
+* `@u.orders` navigates into variable `u`'s `orders` attribute
 ====
 
-===== Summary Table
+==== Context-Dependent Resolution
 
-[cols="2,2,2,2", options="header"]
+Resolution rules differ between `FROM` clauses and other clauses, ensuring SQL compatibility:
+
+*In FROM Clause*
+
+Database names have priority:
+
+1. Try to resolve as database object (qualified or unqualified)
+2. If not found, try to resolve as variable
+3. If neither found, compilation error
+
+.{nbsp}
+[%unbreakable]
+[subs="+normal"]
+====
+*Example:*
+
+[source, partiql]
+----
+FROM orders AS o, o.items AS i
+----
+
+* `orders` - resolves to database object
+* `o.items` - `o` is a variable (declared on left), `.items` navigates into it
+====
+
+*In Non-FROM Clause*
+
+Variables have priority:
+
+1. Try to resolve as variable
+2. If not found, try to resolve as database object
+3. If neither found, compilation error
+
+.{nbsp}
+[%unbreakable]
+[subs="+normal"]
+====
+*Example:*
+
+[source, partiql]
+----
+SELECT o.total
+FROM orders AS o
+----
+
+* `o` - resolves to variable (declared in `FROM`)
+* `.total` - navigates into variable `o`
+====
+
+==== Resolution Algorithm
+
+For a name or path stem:[i_1.i_2. ... .i_n]:
+
+*Step 1: Check for @ prefix*
+
+If name starts with `@`:
+
+* Strip the `@` and resolve stem:[i_1] as variable
+* If variable stem:[i_1] exists, use it; otherwise try longest matching database name
+* Remaining parts are tuple path navigation
+
+*Step 2: Determine context*
+
+* Is this a `FROM` clause path?
+  ** A path is a `FROM` clause path if it appears directly in a `FROM` clause
+  ** Not if it's in a subquery within the `FROM`
+
+*Step 3: Apply context rules*
+
+If `FROM` clause path:
+
+1. Find longest matching qualified name in database environment
+2. If found, use it; remaining parts are tuple navigation
+3. Otherwise, try to resolve stem:[i_1] as variable
+
+If non-`FROM` clause path:
+
+1. Try to resolve stem:[i_1] as variable
+2. If found, remaining parts are tuple navigation from variable
+3. Otherwise, find longest matching qualified name in database environment
+
+==== Complete Example
+
+.{nbsp}
+[%unbreakable]
+[subs="+normal"]
+====
+Given database objects: `catalog.users`, `config`, `orders`
+
+[source, partiql]
+----
+SELECT u.name,
+       config.timeout,                -- database object
+       o.items                        -- variable navigation
+FROM catalog.users AS u,              -- database object (qualified)
+     config AS c,                     -- database object
+     u.order_history AS o             -- variable 'u', path navigation
+WHERE o.total > c.threshold           -- both variables
+  AND o.date > config.start_date      -- 'config' database object (prioritizes variable, but none exists)
+----
+
+Resolution:
+
+* `catalog.users` → database object (qualified name in `FROM`)
+* `config` (first) → database object (unqualified name in `FROM`)
+* `u.order_history` → variable `u`, path `.order_history`
+* `u.name` → variable `u`, path `.name`
+* `config.timeout` → database object `config`, path `.timeout`
+* `o.items` → variable `o`, path `.items`
+* `o.total` → variable `o`, path `.total`
+* `c.threshold` → variable `c`, path `.threshold`
+* `config.start_date` → database object `config`, path `.start_date`
+====
+
+==== Summary
+
+[cols="2,2,2", options="header"]
 |===
-|Context |Pattern |First Choice |Second Choice
-
-|Any
-|`@identifier`
-|Variable
-|Database name
+|Context |Unqualified Name |Qualified Name
 
 |FROM clause
-|`identifier`
-|Database name
-|Variable
+|1. Database object +
+2. Variable
+|Database object only (longest match)
 
-|Non-FROM
-|`identifier`
-|Variable
-|Database name
+|Other clauses
+|1. Variable +
+2. Database object
+|Database object only (longest match)
 
-|Any
-|`@path`
-|Variable (first part)
-|Database name (longest match)
-
-|FROM clause
-|`path`
-|Database name (longest match)
-|Variable (first part)
-
-|Non-FROM
-|`path`
-|Variable (first part)
-|Database name (longest match)
+|With @ prefix
+|1. Variable +
+2. Database object
+|Variable (first part), then longest database match
 |===
 
-These scoping rules ensure that PartiQL maintains SQL compatibility while providing the flexibility needed for nested data navigation and semi-structured queries.
+These resolution rules ensure SQL compatibility while enabling PartiQL's extensions for nested data and semi-structured queries.

@@ -41,6 +41,8 @@ include::types.adoc[]
 include::type_conversions.adoc[]
 include::database_environments.adoc[]
 
+== End of New Document
+
 include::model.adoc[]
 include::environment.adoc[]
 include::paths.adoc[]
