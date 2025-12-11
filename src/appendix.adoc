@@ -1,4 +1,208 @@
 [[sec:appendix]]
 == Appendix
 
-TODO
+[[sec:appendix-environments-examples]]
+=== Examples: Environments and Binding Tuples
+
+This section provides detailed examples illustrating how binding tuples flow through PartiQL query evaluation.
+
+[[sec:appendix-example-basic-evaluation]]
+==== Example: Basic Environment Evaluation
+
+Consider the following database with a single named value `mydb.log`:
+
+[source%unbreakable, partiql]
+----
+mydb.log: {
+  'fileVersion': '1.0',
+  'configurationItems': [
+    { 'resourceId': 'r-001', 'status': 'active' },
+    { 'resourceId': 'r-002', 'status': 'inactive' },
+    { 'resourceId': 'r-003', 'status': 'active' }
+  ]
+}
+----
+
+The database environment contains a single binding:
+
+[stem]
+++++
+p_0 = <<"mydb.log" : {'fileVersion': '1.0', 'configurationItems': [...]}>>
+++++
+
+Now consider this query:
+
+[source%unbreakable, partiql]
+----
+SELECT x.resourceId
+FROM mydb.log.configurationItems x
+----
+
+This query is evaluated within:
+
+* Database environment: stem:[p_0] as shown above
+* Variables environment: stem:[p = <<>>] (empty, since this is not a subquery)
+
+The `FROM` clause produces a bag of binding tuples, one for each element in the `configurationItems` array:
+
+[stem]
+++++
+B_"FROM"^"out" = <<
+  <<x : {'resourceId': 'r-001', 'status': 'active'}>>,
+  <<x : {'resourceId': 'r-002', 'status': 'inactive'}>>,
+  <<x : {'resourceId': 'r-003', 'status': 'active'}>>
+>>
+++++
+
+The `SELECT` clause then evaluates `x.resourceId` for each binding tuple. For the first binding tuple where stem:[x] is bound to `{'resourceId': 'r-001', 'status': 'active'}`, the evaluation proceeds as:
+
+[stem]
+++++
+(p_0, <<x : {'resourceId': 'r-001', 'status': 'active'}>>) |-- "x.resourceId" -> "'r-001'"
+++++
+
+[[sec:appendix-example-binding-tuple-flow]]
+==== Example: Binding Tuple Flow Through Query Clauses
+
+Consider a more complex query that demonstrates how binding tuples flow from one clause to the next:
+
+Database environment:
+
+[stem]
+++++
+p_0 = <<
+  "mydb.r" : [3, 'x'],
+  "mydb.s" : <<{'a':1, 'b':2}, {'a':3}>>
+>>
+++++
+
+Variables environment (top-level query):
+
+[stem]
+++++
+p = <<>>
+++++
+
+Query:
+
+[source%unbreakable, partiql]
+----
+SELECT x AS foo, y.a AS bar
+FROM mydb.r AS x, mydb.s AS y
+WHERE x > y.b
+----
+
+*FROM clause output:*
+
+The `FROM` clause produces the cross product of `mydb.r` and `mydb.s`:
+
+[stem]
+++++
+B_"FROM"^"out" = B_"WHERE"^"in" = <<
+  <<x:3, y:{'a':1, 'b':2}>>,
+  <<x:3, y:{'a':3}>>,
+  <<x:'x', y:{'a':1, 'b':2}>>,
+  <<x:'x', y:{'a':3}>>
+>>
+++++
+
+*WHERE clause evaluation:*
+
+The `WHERE` condition `x > y.b` is evaluated for each binding tuple. For the first binding tuple:
+
+[stem]
+++++
+(p_0, <<x:3, y:{'a':1, 'b':2}>>) |-- "x > y.b" -> "3 > 2" -> "true"
+++++
+
+For the second binding tuple, `y` does not have attribute `b`, so `y.b` evaluates to `MISSING`, and the comparison results in `MISSING` (which fails the WHERE condition).
+
+For the third binding tuple, `x` is the string `'x'`, which cannot be compared with number `2`, resulting in a type mismatch.
+
+*WHERE clause output:*
+
+[stem]
+++++
+B_"WHERE"^"out" = B_"SELECT"^"in" = <<
+  <<x:3, y:{'a':1, 'b':2}>>
+>>
+++++
+
+*SELECT clause evaluation:*
+
+The `SELECT` clause evaluates its expressions for the single binding tuple:
+
+[stem]
+++++
+(p_0, <<x:3, y:{'a':1, 'b':2}>>) |-- "x" -> 3
+(p_0, <<x:3, y:{'a':1, 'b':2}>>) |-- "y.a" -> 1
+++++
+
+*Final result:*
+
+[stem]
+++++
+<<{'foo':3, 'bar':1}>>
+++++
+
+[[sec:appendix-example-nested-queries]]
+==== Example: Variables Environment in Nested Queries
+
+This example illustrates how the variables environment changes in nested queries.
+
+Database environment:
+
+[stem]
+++++
+p_0 = <<"customers" : <<{'id':1, 'name':'Alice'}, {'id':2, 'name':'Bob'}>>
+++++
+
+Query:
+
+[source%unbreakable, partiql]
+----
+SELECT c.name, 
+       (SELECT x.id FROM customers AS x WHERE x.id = c.id) AS matchingIds
+FROM customers AS c
+----
+
+*Outer FROM clause:*
+
+Evaluated with stem:[p = <<>>]:
+
+[stem]
+++++
+B_"FROM,outer"^"out" = <<
+  <<c : {'id':1, 'name':'Alice'}>>,
+  <<c : {'id':2, 'name':'Bob'}>>
+>>
+++++
+
+*Inner subquery evaluation for first binding:*
+
+The subquery `(SELECT x.id FROM customers AS x WHERE x.id = c.id)` is evaluated with:
+
+* Database environment: stem:[p_0] (same as outer)
+* Variables environment: stem:[p = <<c : {'id':1, 'name':'Alice'}>>]
+
+The inner `FROM` clause produces:
+
+[stem]
+++++
+B_"FROM,inner"^"out" = <<
+  <<x : {'id':1, 'name':'Alice'}>>,
+  <<x : {'id':2, 'name':'Bob'}>>
+>>
+++++
+
+For each inner binding tuple, the `WHERE` condition evaluates in the concatenated environment. For the first inner binding:
+
+[stem]
+++++
+p || b = <<c:{'id':1, 'name':'Alice'}>> || <<x:{'id':1, 'name':'Alice'}>>
+       = <<c:{'id':1, 'name':'Alice'}, x:{'id':1, 'name':'Alice'}>>
+++++
+
+The condition `x.id = c.id` evaluates to `1 = 1`, which is `true`.
+
+This example demonstrates how inner queries have access to variables defined by outer queries through the concatenation of binding tuples.
