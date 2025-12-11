@@ -1,14 +1,12 @@
-[[sec:environments-and-variables]]
-== Environments and Variables
+[[sec:scopes-and-variables]]
+== Scopes and Variables
 
-PartiQL queries are evaluated within environments that provide the context for name resolution and variable binding. This section explains how PartiQL manages database objects and variables through a two-tier environment system.
+PartiQL statements are evaluated within scopes that provide the context for name resolution and variable binding. This section explains how PartiQL manages database objects and variables through a two-tier environment system.
 
 [[sec:names]]
 === Binding Names
 
 A database object (table)
-
-A _binding tuple_ is the fundamental data structure used to represent environments in PartiQL. A binding tuple is a collection of name-value pairs: stem:[<<x_1:v_1,...,x_n:v_n>>], where each stem:[x_i] is a unique name that binds to a value stem:[v_i].
 
 .EBNF Grammar for Names
 [source, ebnf]
@@ -23,7 +21,7 @@ identifier = ("$"|"_"|letter), { ("$"|"_"|letter|digit) }
 [[sec:database-environment]]
 === Database Environment
 
-The *database environment* (stem:[p_0]) contains persistent, named database objects that are visible throughout query execution. It includes, but is not limited to: tables, views, top-level PartiQL values, and functions. Each database object is able to be referenced by its *qualified name*.
+The *database environment* (stem:[p_0]) is a global scope containing persistent, named database objects that are visible throughout statement execution. It includes, but is not limited to: tables, views, values, and functions. Each database object is able to be referenced by its *qualified name*.
 
 ==== Qualified Names
 
@@ -60,7 +58,7 @@ The qualified name `company.hr.employees` exists in the database environment ste
 
 ==== Modifying the Database Environment
 
-Certain DDL (Data Definition Language) commands modify the database environment including, but not limited to: `CREATE TABLE` and `CREATE VIEW`.
+Certain DDL (Data Definition Language) statements modify the database environment including, but not limited to: `CREATE TABLE` and `CREATE VIEW`.
 
 ==== Characteristics of Database Objects
 
@@ -72,7 +70,7 @@ Database objects contained by the database environment have the following charac
 [[sec:lexical-scoping]]
 === Lexical Scoping
 
-PartiQL uses *lexical scoping* for variables, where the scope of a variable is determined by its position in the query text. Variables are introduced by specific clauses and are visible within their lexical scope and nested sub-scopes.
+PartiQL uses *lexical scoping* for variables, where the scope of a variable is determined by its position in the statement text. Variables are introduced by specific clauses and are visible within their lexical scope and nested sub-scopes.
 
 PartiQL, similar to SQL, exposes certain clauses that bind variables to the current scope, such as `FROM`, `LET`, and `GROUP BY`. Please see each clause for detailed binding and scope information.
 
@@ -86,7 +84,7 @@ SELECT
     SELECT c.name
     LIMIT 1
   ) AS example_customer
-;
+;   -- outer scope terminates
 ----
 
 WARNING: Not all clauses have an additive effect to scope nesting. For example, `GROUP BY` terminates the current scope and replaces it with a new one.
