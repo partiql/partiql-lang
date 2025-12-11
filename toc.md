@@ -62,13 +62,13 @@
 
 ## 6. PartiQL Query Syntax
    7.1. Query Structure (SFW Queries)  
-   7.2. FROM Clause  
+   7.2. FROM Clause
    &nbsp;&nbsp;&nbsp;&nbsp;7.2.1. Ranging Over Collections  
    &nbsp;&nbsp;&nbsp;&nbsp;7.2.2. UNPIVOT  
    &nbsp;&nbsp;&nbsp;&nbsp;7.2.3. JOIN Operations (CROSS JOIN, LEFT JOIN, FULL JOIN)  
    &nbsp;&nbsp;&nbsp;&nbsp;7.2.4. AT Clause for Position Variables  
    &nbsp;&nbsp;&nbsp;&nbsp;7.2.5. LATERAL keyword  
-   7.3. LET Clause  
+   7.3. LET Clause
    7.4. WHERE Clause  
    7.5. GROUP BY Clause  
    &nbsp;&nbsp;&nbsp;&nbsp;7.5.1. Core GROUP BY with GROUP AS  
