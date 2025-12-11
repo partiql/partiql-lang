@@ -3,26 +3,12 @@
 
 PartiQL queries are evaluated within environments that provide the context for name resolution and variable binding. This section explains how PartiQL manages database objects and variables through a two-tier environment system.
 
-[[sec:binding-tuples]]
-=== Binding Tuples
+[[sec:names]]
+=== Binding Names
+
+A database object (table)
 
 A _binding tuple_ is the fundamental data structure used to represent environments in PartiQL. A binding tuple is a collection of name-value pairs: stem:[<<x_1:v_1,...,x_n:v_n>>], where each stem:[x_i] is a unique name that binds to a value stem:[v_i].
-
-*Key Properties:*
-
-* Similar to PartiQL tuples, but used internally for semantic operations
-* All names within a binding tuple are unique
-* Explicitly represents variables with `MISSING` values rather than omitting them
-  ** Example: stem:[<<x : 1, y: "MISSING">>] instead of stem:[<<x : 1>>]
-  ** This distinction is important: the absence of a variable name differs from a variable whose value is `MISSING`
-
-*Binding Tuple Concatenation:*
-
-Two binding tuples stem:[b] and stem:[b'] can be concatenated as stem:[b||b']:
-
-* The result contains all bindings from both tuples
-* If the same name appears in both, stem:[b']'s binding takes precedence (right argument wins)
-* This operation implements variable shadowing in nested scopes
 
 .EBNF Grammar for Names
 [source, ebnf]
@@ -37,16 +23,7 @@ identifier = ("$"|"_"|letter), { ("$"|"_"|letter|digit) }
 [[sec:database-environment]]
 === Database Environment
 
-The *database environment* (stem:[p_0]) is analogous to global scope in traditional programming languages. It contains persistent, named database objects that are visible throughout query execution.
-
-==== Contents
-
-The database environment includes:
-
-* *Tables* - relational data collections
-* *Views* - virtual tables defined by queries
-* *Qualified names* - hierarchical names like `catalog.schema.table`
-* *System objects* - built-in functions and metadata tables
+The *database environment* (stem:[p_0]) contains persistent, named database objects that are visible throughout query execution. It includes, but is not limited to: tables, views, top-level PartiQL values, and functions. Each database object is able to be referenced by its *qualified name*.
 
 ==== Qualified Names
 
@@ -63,7 +40,7 @@ qualified_name = identifier, ".", identifier, { ".", identifier } ;
 * `catalog.schema.table` - three-part qualified name
 * `system.information_schema.columns` - system catalog access
 
-IMPORTANT: A qualified name like `mydb.users` is distinct from a quoted identifier `"mydb.users"`. The former is two separate identifiers forming a path; the latter is a single identifier containing a dot character.
+NOTE: A qualified name like `mydb.users` is distinct from a quoted identifier `"mydb.users"`. The former is two separate identifiers forming a qualified name; the latter is a single identifier containing a dot character.
 
 .{nbsp}
 [%unbreakable]
@@ -83,75 +60,36 @@ The qualified name `company.hr.employees` exists in the database environment ste
 
 ==== Modifying the Database Environment
 
-Only certain DDL (Data Definition Language) commands modify the database environment:
+Certain DDL (Data Definition Language) commands modify the database environment including, but not limited to: `CREATE TABLE` and `CREATE VIEW`.
 
-* `CREATE TABLE` - adds a new table
-* `CREATE VIEW` - adds a new view
-* `DROP TABLE` / `DROP VIEW` - removes objects
-* `ALTER TABLE` - modifies table structure
+==== Characteristics of Database Objects
 
-Query execution (SELECT, INSERT, UPDATE, DELETE) does not modify the database environment—it only reads from stem:[p_0] and modifies data values.
-
-==== Characteristics
+Database objects contained by the database environment have the following characteristics:
 
 * *Global scope* - visible throughout all queries
 * *Persistent* - exists beyond individual query executions
-* *Immutable during queries* - stays constant while a query runs
-* *Established externally* - populated by DDL commands, not by SELECT queries
 
 [[sec:lexical-scoping]]
 === Lexical Scoping
 
 PartiQL uses *lexical scoping* for variables, where the scope of a variable is determined by its position in the query text. Variables are introduced by specific clauses and are visible within their lexical scope and nested sub-scopes.
 
-==== Variable Declaration
-
-Variables are declared (bound) by several PartiQL clauses:
-
-*FROM Clause*
-
-The `FROM` clause introduces variables that bind to elements from collections:
+PartiQL, similar to SQL, exposes certain clauses that bind variables to the current scope, such as `FROM`, `LET`, and `GROUP BY`. Please see each clause for detailed binding and scope information.
 
 [source, partiql]
 ----
-FROM orders AS o  -- declares variable 'o'
+FROM orders AS o   -- nests scope; references db object 'orders'; declares variable 'o'
+LET o.quantity * o.price AS total    -- declares variable 'total'
+SELECT
+  (
+    FROM o.customers AS c   -- creates nested scope; references free var from outer scope
+    SELECT c.name
+    LIMIT 1
+  ) AS example_customer
+;
 ----
 
-[source, partiql]
-----
-FROM customers AS c, orders AS o  -- declares 'c' and 'o'
-----
-
-*LET Clause*
-
-The `LET` clause introduces variables that bind to computed expressions:
-
-[source, partiql]
-----
-SELECT ...
-FROM orders AS o
-LET o.quantity * o.price AS total  -- declares variable 'total'
-----
-
-*GROUP BY Clause*
-
-The `GROUP BY` clause with `GROUP AS` introduces a variable that binds to the group:
-
-[source, partiql]
-----
-SELECT sensor, COUNT(g) AS reading_count
-FROM logs AS l
-GROUP BY l.sensor AS sensor GROUP AS g  -- declares 'sensor' and 'g'
-----
-
-*AT Clause*
-
-The `AT` clause in `FROM` introduces a variable for array indices or positions:
-
-[source, partiql]
-----
-FROM items AS item AT index  -- declares 'item' and 'index'
-----
+WARNING: Not all clauses have an additive effect to scope nesting. For example, `GROUP BY` terminates the current scope and replaces it with a new one.
 
 ==== Scope Rules
 

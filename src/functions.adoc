@@ -1,0 +1,80 @@
+[[sec:funcs-and-ops]]
+== Functions and Operators
+
+TODO
+
+[[sec:type-mismatch]]
+=== Type Mismatch
+
+TODO
+
+[[sec:absent-inputs]]
+=== Absent Value Inputs
+
+TODO
+
+[[sec:arithmetic-funcs-and-ops]]
+=== Arithmetic Functions and Operators
+
+TODO
+
+[[sec:comparison-ops]]
+=== Comparison Operators
+
+TODO
+
+[[sec:equality]]
+==== Equality and Deep Equality
+
+TODO
+
+
+[[sec:order-by-less-than-ops]]
+==== Order-By Less-Than Function
+
+TODO
+
+[[sec:logical-ops]]
+=== Logical Operators
+
+TODO
+
+[[sec:aggregate-funcs]]
+=== Aggregate Functions
+
+TODO
+
+[[sec:collection-funcs]]
+=== Collection Functions
+
+TODO
+
+[[sec:type-check-funcs]]
+=== Type Checking Functions
+
+TODO
+
+[[sec:path-ops]]
+=== Path Operator
+
+TODO
+
+[[sec:index-ops]]
+=== Index Operator
+
+TODO
+
+[[sec:path-coll-ops]]
+=== Path Collection Expressions
+
+TODO
+
+[[sec:wildcard-ops]]
+=== Wildcard Steps
+
+TODO
+
+[[sec:op-precedence]]
+=== Operator Precedence
+
+TODO

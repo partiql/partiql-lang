@@ -40,6 +40,7 @@ include::execution_modes.adoc[]
 include::types.adoc[]
 include::type_conversions.adoc[]
 include::database_environments.adoc[]
+include::functions.adoc[]
 
 == End of New Document
 
