@@ -1,0 +1,40 @@
+[[sec:external-type-systems]]
+=== External Data Models
+
+PartiQL's type system is designed to be flexible and expressive enough to represent data from diverse sources, each with their own data models and type systems. This design enables interoperability across a wide range of data formats and sources.
+
+==== Flexible Type System Design
+
+PartiQL's type system is designed to accommodate a wide variety of data sources, including both structured and semi-structured data formats. This flexibility allows PartiQL implementations to work with data from multiple sources through a unified query interface.
+
+The PartiQL type system includes:
+
+* **Scalar types**: Integers, decimals, floating-point numbers, strings, timestamps, booleans, and binary types
+* **Complex types**: Tuples (structures), arrays (ordered collections), and bags (unordered collections)
+* **Absent values**: NULL and MISSING to represent different kinds of absent data
+* **Nested structures**: Arbitrary composition of tuples, arrays, and bags to represent hierarchical data
+
+This rich type system enables PartiQL to represent data from various sources while maintaining a consistent query interface.
+
+==== Data Source Compatibility
+
+PartiQL implementations can map data from diverse sources to PartiQL's type system. Examples of data formats and sources that can be queried using PartiQL include:
+
+* **Amazon Ion**: A richly-typed, self-describing data format with support for arbitrary precision numerics, annotations, and multiple encoding formats
+* **JSON**: The ubiquitous semi-structured data format widely used in web services and document stores
+* **Apache Parquet**: A columnar storage format commonly used in data lakes and analytical workloads
+* **Apache Arrow**: An in-memory columnar data format designed for efficient analytical operations
+* **Relational databases**: Traditional SQL databases with fixed schemas
+* **Other structured and semi-structured formats**: CSV, XML, Avro, and more
+
+The mapping between these external formats and PartiQL's type system is the responsibility of PartiQL implementations. Different implementations may provide specific features or optimizations for particular data sources, but the PartiQL language specification remains independent of any external type system.
+
+==== Implementation Considerations
+
+When a PartiQL implementation maps external data to PartiQL's type system, it must ensure that:
+
+1. **Type preservation**: The semantics and precision of the original data are maintained where possible
+2. **Query consistency**: Queries produce predictable results regardless of the underlying data source
+3. **Interoperability**: Data from different sources can be queried and combined using the same PartiQL syntax
+
+The specific details of how external data formats are mapped to PartiQL types are implementation-specific and not part of the PartiQL language specification.

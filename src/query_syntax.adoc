@@ -1,0 +1,637 @@
+[[sec:query-syntax]]
+== PartiQL Query Syntax
+
+PartiQL extends SQL's query capabilities to work seamlessly with nested and semi-structured data while maintaining full backward compatibility with SQL. This section describes the syntax and semantics of PartiQL queries, with particular attention to how data flows through query clauses via binding tuples.
+
+[[sec:query-structure]]
+=== Query Structure
+
+PartiQL queries follow the SFW (Select-From-Where) model familiar from SQL, extended with additional clauses (such as SELECT VALUE, PIVOT, and LET) for handling complex data structures. A complete PartiQL query may include the following clauses:
+
+[source, partiql]
+----
+// TODO: Also add WITH and WINDOW clauses.
+SELECT <select_list> | SELECT VALUE <expression> | PIVOT <expression> AT <expression>
+FROM <data_source>
+[ LET <variable_bindings> ]
+[ WHERE <condition> ]
+[ GROUP BY <grouping_expressions> [ GROUP AS <group_variable> ] ]
+[ HAVING <condition> ]
+[ ORDER BY <ordering_expressions> ]
+[ LIMIT <number> ]
+[ OFFSET <number> ]
+----
+
+[[sec:clause-exec-order]]
+=== Clause Execution Order
+
+PartiQL clauses are evaluated in the following logical order, which differs from their textual order in the query:
+
+1. **FROM** - Establishes data sources and creates initial binding tuples
+2. **LET** - Adds computed variables to binding tuples
+3. **WHERE** - Filters binding tuples based on conditions
+4. **GROUP BY** - Partitions binding tuples into groups
+5. **HAVING** - Filters groups based on aggregate conditions
+6. **SELECT / SELECT VALUE / PIVOT** - Transforms binding tuples into output values
+7. **ORDER BY** - Orders the output (converting bags to arrays)
+8. **LIMIT / OFFSET** - Restricts the number of output values
+
+[[sec:binding-tuple-flow]]
+=== Binding Tuples and Data Flow
+
+PartiQL's compositional semantics are based on the flow of <<sec:binding-tuples, binding tuples>> through query clauses. Each clause:
+
+1. Receives a collection (bag or array) of binding tuples as input
+2. Evaluates expressions within the context of each binding tuple
+3. Produces a collection of binding tuples as output for the next clause
+
+A binding tuple has the form `\<<x₁:v₁, ..., xₙ:vₙ>>` where each `xᵢ` is a variable name bound to a value `vᵢ`. For example, `\<<customer: {'id':1, 'name':'Alice'}, order: {'id':100}>>` binds variable `customer` to a tuple and variable `order` to another tuple.
+
+When a clause evaluates an expression, it does so within an environment formed by:
+
+* The _database environment_ containing database object bindings
+* The _variables environment_ formed by concatenating the query's variable bindings with the current binding tuple
+
+This uniform treatment of binding tuples allows each clause to be understood independently while maintaining a clear flow of data through the query pipeline.
+
+[[sec:from-clause]]
+=== FROM Clause
+
+The `FROM` clause establishes the data sources for a query and creates the initial set of binding tuples that flow through subsequent clauses.
+
+==== Basic Syntax
+
+[source, partiql]
+----
+FROM <collection_expression> [ AS ] <variable> [ AT <position_variable> ]
+----
+
+The `FROM` clause evaluates an expression that typically refers to a database collection (table, array, bag) and binds each element to a variable. The optional `AT` clause binds the position (index) of each element, if the collection expression is an ordered collection.
+
+==== Ranging Over Collections
+
+When the `FROM` clause ranges over a collection, it produces one binding tuple for each element in the collection.
+
+For an bag `[e₀, e₁, ..., eₙ₋₁]`, the clause:
+[source, partiql]
+----
+FROM bag_expression AS v
+----
+
+produces binding tuples `<v:e₀>`, `<v:e₁>`, ..., `<v:eₙ₋₁>`.
+
+For an array `[e₀, e₁, ..., eₙ₋₁]`, the clause:
+[source, partiql]
+----
+FROM array_expression AS v AT p
+----
+
+produces binding tuples `<v:e₀, p:0>`, `<v:e₁, p:1>`, ..., `<v:eₙ₋₁, p:n-1>`.
+
+
+==== Input and Output Binding Tuples
+
+For each element in the data source, the output consists of the input variables environment concatenated with a binding tuple containing:
+
+* the element variable, and
+* the position variable (if `AT` is present)
+
+This produces one output binding tuple per element in the data source. The output is unordered, regardless of whether the data source is ordered or not.
+
+==== Type Coercion and Error Handling
+
+In permissive mode, if the `AT` is present and:
+
+* the `FROM` expression is not an ordered collection: the position variable's binding will be `MISSING`
+
+In permissive mode, if the `FROM` expression evaluates to:
+
+* A scalar value: It is coerced to a single-element bag
+* A tuple: It is coerced to a single-element bag
+* `NULL` or `MISSING`: It is coerced to a single-element bag containing the absent value
+
+In type checking mode, these cases result in type errors.
+
+[[sec:unpivot-clause]]
+=== UNPIVOT Operation
+
+The `UNPIVOT` operation transforms a tuple into a collection of attribute-value pairs, enabling iteration over a tuple's contents.
+
+[source, partiql]
+----
+FROM UNPIVOT <tuple_expression> AS <value_variable> AT <name_variable>
+----
+
+For a tuple `{'a₁':v₁, ..., 'aₙ':vₙ}`, `UNPIVOT` produces binding tuples:
+
+* `<value_variable:v₁, name_variable:'a₁'>`
+* `<value_variable:v₂, name_variable:'a₂'>`
+* ...
+* `<value_variable:vₙ, name_variable:'aₙ'>`
+
+==== Input and Output Binding Tuples
+
+For each attribute in the tuple, the output consists of the input variables environment concatenated with a binding tuple containing two bindings:
+
+* one for the value variable, and
+* one for the name variable.
+
+This produces one output binding tuple per attribute in the input tuple.
+
+==== Type Coercion and Error Handling
+
+In permissive mode, if the `UNPIVOT` expression does not evaluate to a tuple, type coercion is applied:
+
+* **Non-tuple values (except MISSING)**: The value is wrapped in a single-attribute tuple with the attribute name `_1`. For example, if `x` evaluates to a scalar, array, or bag, it is treated as `{'_1': x}`.
+* **MISSING values**: The value is coerced to an empty tuple `{}`, which produces no binding tuples.
+
+In type checking mode, these cases result in type errors.
+
+[[sec:joins]]
+=== JOINs
+
+PartiQL supports various join operations that combine binding tuples from multiple data sources.
+
+==== CROSS JOIN
+
+The syntax:
+[source, partiql]
+----
+<left> CROSS JOIN <right>
+<left>, <right>
+<left> JOIN <right> ON TRUE
+----
+
+are all equivalent and produce the Cartesian product of binding tuples from the left and right sides.
+
+The right side expression can reference variables defined by the left side expression, enabling correlated joins and nested data access patterns (similar to SQL's `LATERAL`).
+
+===== Input and Output Binding Tuples
+
+The left side expression is evaluated using the input variables environment. For each element from the left side, the output consists of the input variables environment concatenated with a binding tuple containing the left side's bindings.
+
+The right side expression is then evaluated using the output binding tuples from the left side. For each element from the right side, the output consists of its input binding tuple concatenated with a binding tuple containing the right side's bindings.
+
+The overall output of the join uses the output binding tuples from the right side.
+
+==== LEFT JOIN
+
+The syntax:
+[source, partiql]
+----
+<left> LEFT JOIN <right> ON <condition>
+<left> LEFT CROSS JOIN <right>
+----
+
+performs a left outer join, preserving all binding tuples from the left side even when no matching right-side binding tuples exist.
+
+The right side expression can reference variables defined by the left side expression, enabling correlated joins (similar to SQL's `LATERAL`).
+
+===== Input and Output Binding Tuples
+
+The left side expression is evaluated using the input variables environment. For each element from the left side, the output consists of the input variables environment concatenated with a binding tuple containing the left side's bindings.
+
+The right side expression is then evaluated using the output binding tuples from the left side. When an `ON` condition is specified, only right side binding tuples where the condition evaluates to `true` are retained.
+
+For each left binding tuple, the output consists of:
+
+* If matching right side binding tuples exist: the left binding tuple concatenated with a binding tuple containing the right side's bindings (one output per matching right binding tuple)
+* If no matching right side binding tuples exist: the left binding tuple concatenated with a binding tuple containing `NULL` values for all right side variables
+
+The overall output of the join uses the output binding tuples from this process.
+
+==== FULL JOIN
+
+[source, partiql]
+----
+<left> FULL JOIN <right> ON <condition>
+----
+
+The `FULL JOIN` provides SQL's full outer join semantics. Unlike `CROSS JOIN` and `LEFT JOIN`, the right side of a `FULL JOIN` cannot reference variables from the left side (consistent with SQL).
+
+==== LATERAL
+
+The `LATERAL` keyword can be used for SQL compatibility:
+[source, partiql]
+----
+<left>, LATERAL <right>
+----
+
+This is equivalent to `<left>, <right>`. PartiQL allows correlation by default, so `LATERAL` is optional but may be included for clarity or SQL compatibility.
+
+[[sec:let-clause]]
+=== LET Clause
+
+_TODO: The LET clause allows binding intermediate computations to variables that can be referenced in subsequent clauses._
+
+==== Input and Output Binding Tuples
+
+For each input binding tuple, the output consists of the input binding tuple concatenated with a binding tuple containing bindings for the LET-defined variables.
+
+[[sec:where-clause]]
+=== WHERE Clause
+
+The `WHERE` clause filters binding tuples based on a boolean condition, passing through only those tuples for which the condition evaluates to `true`.
+
+==== Syntax
+
+[source, partiql]
+----
+WHERE <condition>
+----
+
+==== Semantics
+
+The `WHERE` clause evaluates its condition for each input binding tuple. The condition is evaluated within the environment formed by the database environment and the variables defined in the binding tuple.
+
+==== Input and Output Binding Tuples
+
+For each input binding tuple where the condition evaluates to `true`, the output consists of that binding tuple unchanged. Binding tuples where the condition evaluates to `false`, `NULL`, `MISSING`, or a non-boolean value (in permissive mode) are excluded from the output.
+
+==== Three-Valued Logic
+
+PartiQL follows SQL's three-valued logic, where conditions can evaluate to `true`, `false`, or `NULL`/`MISSING`. Only binding tuples where the condition is `true` pass through the `WHERE` clause.
+
+If the condition evaluates to:
+
+* `true`: The binding tuple is included in the output
+* `false`: The binding tuple is excluded
+* `NULL` or `MISSING`: The binding tuple is excluded
+* A non-boolean value: The binding tuple is excluded (in permissive mode)
+
+==== NULL and MISSING
+
+PartiQL has two types of absent values: `NULL` and `MISSING`. In boolean expressions, they behave identically:
+
+* `NULL AND TRUE` → `NULL`
+* `MISSING AND TRUE` → `NULL`
+* `NULL OR FALSE` → `NULL`
+* `MISSING OR FALSE` → `NULL`
+
+The predicate `IS MISSING` can distinguish between them:
+
+* `NULL IS MISSING` → `false`
+* `MISSING IS MISSING` → `true`
+
+==== Type Errors in Permissive Mode
+
+In permissive mode, type errors in the `WHERE` condition are treated as `false`. For example, comparing a string to a number fails gracefully by filtering out the binding tuple rather than aborting the query.
+
+[[sec:group-by-clause]]
+=== GROUP BY Clause
+
+The `GROUP BY` clause partitions binding tuples into groups based on the values of grouping expressions, enabling aggregation and group-level computations.
+
+==== Core Syntax
+
+[source, partiql]
+----
+GROUP BY <expression> AS <variable> [, ...] GROUP AS <group_variable>
+----
+
+The `GROUP BY` clause defines:
+
+* _Grouping expressions_: Expressions whose values determine group membership
+* _Grouping variables_: Variables that hold the computed grouping expression values
+* _Group variable_: A variable that holds all binding tuples in the group
+
+==== Semantics
+
+The input binding tuples are partitioned into groups where all tuples in a group have equivalent values for all grouping expressions. The equivalence function used for grouping treats `NULL` and `MISSING` as equal (both are coerced to `NULL` before comparison) and considers two non-null values equivalent if they compare equal according to the equality operator.
+
+==== Input and Output Binding Tuples
+
+For each group, the output consists of a binding tuple containing:
+
+* bindings for the grouping variables (one per grouping expression), and
+* a binding for the group variable containing all input binding tuples that belong to that group
+
+==== The Group Variable
+
+The group variable explicitly contains all binding tuples that belong to the group. This makes PartiQL's grouping more powerful than SQL's, as the full group data is available for complex computations beyond standard aggregate functions.
+
+The binding tuples within the group variable retain all variables from the `FROM` and `LET` clauses. This allows sophisticated operations on the grouped data.
+
+==== GROUP ALL
+
+The `GROUP ALL` variant creates a single group containing all input binding tuples, regardless of whether any tuples exist:
+
+[source, partiql]
+----
+GROUP ALL AS <group_variable>
+----
+
+This is useful for SQL compatibility when computing aggregates over an entire result set without explicit grouping criteria.
+
+*Binding Tuples Flow:* `GROUP ALL` always produces exactly one output binding tuple containing the group variable. If the input is empty, the group variable is an empty bag.
+
+==== SQL Compatibility Features
+
+For SQL compatibility, PartiQL supports several syntactic conveniences:
+
+===== Implicit Group Variable
+
+When using SQL aggregate functions (like `COUNT`, `SUM`, `AVG`) without an explicit group variable, PartiQL automatically supplies the group variable. If a `GROUP BY` exists, it's augmented with `GROUP AS g` where `g` is a fresh variable. If no `GROUP BY` exists, `GROUP ALL AS g` is added.
+
+The aggregate function call is rewritten to operate on the group variable. For example, `AVG(x.price)` becomes `AVG(SELECT VALUE p.x.price FROM g AS p)`.
+
+===== Grouping Without Variable Names
+
+SQL allows grouping expressions without binding them to variables:
+[source, partiql]
+----
+GROUP BY <expression>
+----
+
+This is syntactic sugar for:
+[source, partiql]
+----
+GROUP BY <expression> AS x
+----
+
+where `x` is a system-generated variable name.
+
+===== Using SELECT Aliases in GROUP BY
+
+For SQL compatibility, aliases defined in the `SELECT` clause can be used in the `GROUP BY` clause:
+[source, partiql]
+----
+SELECT expr AS alias
+FROM ...
+GROUP BY alias
+----
+
+This is rewritten to:
+[source, partiql]
+----
+SELECT expr AS alias
+FROM ...
+GROUP BY expr
+----
+
+[[sec:having-clause]]
+==== HAVING Clause
+
+The `HAVING` clause filters groups after grouping has occurred:
+
+[source, partiql]
+----
+HAVING <condition>
+----
+
+The `HAVING` clause behaves like a `WHERE` clause but operates on group-level binding tuples. It can reference grouping variables and the group variable, and typically includes aggregate functions.
+
+===== Input and Output Binding Tuples
+
+For each input binding tuple where the condition evaluates to `true`, the output consists of that binding tuple unchanged. Binding tuples where the condition evaluates to `false`, `NULL`, `MISSING`, or a non-boolean value (in permissive mode) are excluded from the output.
+
+[[sec:select-value-clause]]
+=== SELECT VALUE Clause
+
+The `SELECT VALUE` clause is PartiQL's core output mechanism, producing a collection of values (not necessarily tuples) from binding tuples.
+
+==== Syntax
+
+[source, partiql]
+----
+SELECT VALUE <expression>
+----
+
+==== Semantics
+
+The `SELECT VALUE` clause evaluates its expression for each input binding tuple and collects the results into a bag (or array, if `ORDER BY` is present).
+
+Unlike SQL's `SELECT`, which always produces a collection of tuples, `SELECT VALUE` can produce a collection of any values: scalars, arrays, bags, tuples, or heterogeneous collections.
+
+==== Input and Output
+
+For each input binding tuple, the expression is evaluated to produce an output value. The output is a collection (bag or array) of these values.
+
+==== Constructors in SELECT VALUE
+
+The `SELECT VALUE` expression frequently uses constructors to build structured output:
+
+===== Tuple Constructors
+
+[source, partiql]
+----
+SELECT VALUE {'attr1': expr1, 'attr2': expr2}
+----
+
+Constructs tuples with specified attributes. Attribute names are expressions (typically string literals) and values are arbitrary expressions.
+
+===== Array Constructors
+
+[source, partiql]
+----
+SELECT VALUE [expr1, expr2, expr3]
+----
+
+Constructs fixed-length arrays.
+
+===== Bag Constructors
+
+[source, partiql]
+----
+SELECT VALUE <<expr1, expr2, expr3>>
+----
+
+Constructs bags (unordered collections with duplicates).
+
+==== Treatment of MISSING
+
+The handling of `MISSING` values differs based on the constructor:
+
+* *In tuple constructors*: If an attribute value evaluates to `MISSING`, the attribute is omitted from the tuple
+* *In array constructors*: `MISSING` values are included in the array
+* *In bag constructors*: `MISSING` values are included in the bag
+* *As direct output*: `MISSING` values are included in the result collection
+
+==== Type Errors in Tuple Constructors
+
+When constructing tuples, if an attribute name expression evaluates to a non-string value:
+
+* In permissive mode: The attribute is omitted
+* In type checking mode: An error is raised
+
+If a tuple constructor produces duplicate attribute names, both attributes are included in the tuple (PartiQL tuples can have duplicate attribute names).
+
+[[sec:select-clause]]
+=== SELECT Clause
+
+The SQL `SELECT` clause is syntactic sugar over `SELECT VALUE` that specifically constructs tuples. It provides SQL compatibility while leveraging PartiQL's underlying `SELECT VALUE` semantics.
+
+==== Syntax
+
+[source, partiql]
+----
+SELECT <expr1> AS <name1>, <expr2> AS <name2>, ...
+----
+
+==== Desugaring to SELECT VALUE
+
+The SQL `SELECT` clause:
+[source, partiql]
+----
+SELECT e1 AS a1, e2 AS a2, ..., en AS an
+----
+
+is equivalent to:
+[source, partiql]
+----
+SELECT VALUE {'a1': e1, 'a2': e2, ..., 'an': an}
+----
+
+==== Implicit Attribute Names
+
+When an alias is omitted, PartiQL infers an attribute name:
+
+* If the expression is a path ending in an attribute name (e.g., `x.attr`), the attribute name is used
+* Otherwise, a system-generated name is used (implementation-dependent)
+
+For example:
+[source, partiql]
+----
+SELECT x.price, x.quantity * 2
+----
+
+is equivalent to:
+[source, partiql]
+----
+SELECT x.price AS price, x.quantity * 2 AS _2
+----
+
+(where `_2` represents a system-generated name)
+
+==== SELECT *
+
+The `SELECT *` syntax expands to include all attributes from tuple-valued variables:
+
+[source, partiql]
+----
+SELECT x.*
+----
+
+When `x` is bound to a tuple, this includes all attributes of `x` in the output tuple. When `x` is not a tuple, it is coerced to a singleton tuple with a system-generated attribute name.
+
+Multiple `*` items and regular expressions can be combined:
+[source, partiql]
+----
+SELECT x.*, expr AS name, y.*
+----
+
+This uses the `TUPLEUNION` function to combine attributes from multiple sources into a single tuple. Duplicate attribute names may result.
+
+*Binding Tuples Flow:*
+
+* Input: B_SELECT^in (binding tuples from preceding clauses)
+* Processing: For each binding tuple b, evaluate the SELECT expressions and construct a tuple
+* Output: A bag or array of tuples (one tuple per input binding tuple)
+
+_TODO: Need to add tupleunion and IS NOT TUPLE cases here_
+
+[[sec:pivot-clause]]
+=== PIVOT Clause
+
+The `PIVOT` clause constructs a single tuple with a data-dependent number of attributes, where both attribute names and values come from the data.
+
+==== Syntax
+
+[source, partiql]
+----
+PIVOT <value_expression> AT <name_expression>
+----
+
+==== Semantics
+
+Unlike `SELECT VALUE` which produces a collection, `PIVOT` produces a single tuple. For each input binding tuple, it evaluates the name expression (which should yield a string) and the value expression, creating an attribute-value pair in the output tuple.
+
+==== Input and Output
+
+For each input binding tuple, the name and value expressions are evaluated to produce an attribute-value pair. The output is a single tuple containing all of these attribute-value pairs.
+
+==== Treatment of MISSING and Type Errors
+
+If a name expression evaluates to:
+
+* `MISSING`: The attribute is omitted from the output tuple
+* A non-string: In permissive mode, the attribute is omitted; in type checking mode, an error is raised
+
+If a value expression evaluates to `MISSING`, the attribute is omitted.
+
+[[sec:order-by-clause]]
+=== ORDER BY Clause
+
+The `ORDER BY` clause sorts the query output, converting a bag into an array.
+
+==== Syntax
+
+[source, partiql]
+----
+ORDER BY <expr1> [ASC|DESC] [NULLS FIRST|NULLS LAST],
+         <expr2> [ASC|DESC] [NULLS FIRST|NULLS LAST],
+         ...
+----
+
+or:
+
+[source, partiql]
+----
+ORDER BY PRESERVE
+----
+
+==== Semantics
+
+The `ORDER BY` clause evaluates its ordering expressions for each output value of the query, since ordering occurs after `SELECT VALUE`.
+
+==== Input and Output
+
+For each input (binding tuple or value, depending on clause position), ordering expressions are evaluated. The output is an array with all inputs sorted according to the order-by less-than function.
+
+==== Order-By Less-Than Function
+
+PartiQL's order-by less-than function extends SQL's ordering to handle heterogeneous types:
+
+1. `NULL` and `MISSING` compare equal and are first (with `NULLS FIRST`) or last (with `NULLS LAST`)
+2. Boolean values: `false` < `true`
+3. Numbers: ordered numerically (special values: `nan` < `-inf` < numbers < `+inf`)
+4. Timestamps: ordered by absolute point in time
+5. Text strings: ordered lexicographically by Unicode scalar
+6. Binary LOBs: ordered lexicographically by octet
+7. Arrays: ordered lexicographically by element comparison
+8. Tuples: ordered lexicographically by sorted attributes (name first, then value)
+9. Bags: converted to sorted arrays, then compared
+
+==== ASC and DESC
+
+* `ASC` (ascending, the default): orders from smallest to largest
+* `DESC` (descending): orders from largest to smallest
+
+==== NULLS FIRST and NULLS LAST
+
+* `NULLS FIRST`: places `NULL` and `MISSING` values at the beginning
+* `NULLS LAST`: places `NULL` and `MISSING` values at the end
+
+The default is `NULLS FIRST` for `ASC` and `NULLS LAST` for `DESC` (matching SQL).
+
+==== PRESERVE
+
+The `ORDER BY PRESERVE` directive preserves the input order when the input is an array. This is useful when you want to maintain the original array ordering through query evaluation.
+
+==== SQL Compatibility
+
+For SQL compatibility, ordering expressions can reference attributes of tuple-valued results directly, without explicitly referencing a variable. Additionally, aliases defined in the `SELECT` clause can be used in `ORDER BY` expressions.
+
+[[sec:limit-offset-clauses]]
+=== LIMIT and OFFSET Clauses
+
+_TODO: The LIMIT and OFFSET clauses restrict the number of output values returned by a query._
+
+*Binding Tuples Flow:* These clauses operate on the final output values (after `SELECT VALUE`/`SELECT`/`PIVOT` and `ORDER BY`), selecting a slice of the result. They do not operate on binding tuples but on the final result collection.
+
+[[sec:with-clause]]
+=== WITH Clause (Common Table Expressions)
+
+_TODO: The WITH clause defines named subqueries (Common Table Expressions) that can be referenced in the main query._
+
+*Binding Tuples Flow:* Each CTE is evaluated independently and produces a named result collection. These named results are added to the database environment for the main query, allowing them to be referenced in `FROM` clauses like any other database collection.

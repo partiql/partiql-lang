@@ -1,0 +1,187 @@
+[[sec:funcs-and-ops]]
+== Functions and Operators
+
+The semantics of predicates, operators and scalar functions in PartiQL are identical to those of SQL when their inputs are compatible with SQL. PartiQL extends these semantics for inputs beyond those allowed by SQL.
+
+[[sec:type-mismatch]]
+=== Type Mismatch
+
+Alike SQL, all functions have input argument types that they conform to. When a function receives input data whose types do not conform to its expected input argument types,
+
+* in permissive mode, the function shall return `MISSING`.
+* in type checking mode, execution shall fail.
+
+[[sec:absent-inputs]]
+=== Absent Value Inputs
+
+All functions return `MISSING` when one of their inputs is `MISSING`, unless otherwise stated.
+
+TODO: Link to IS MISSING.
+
+[[sec:equality]]
+=== Equality
+
+PartiQL's equality operator (`=`) can compare values of any two types according to the rules of the PartiQL type system.
+
+Since PartiQL variables may bind to composite values (collections, tuples), equality is extended to support _deep equality_. This is implemented by leveraging `eqg` (which treats `NULL` equal to `NULL` and `MISSING` equal to `MISSING`). It is applied for these cases:
+
+* **Arrays**: Two arrays are equal if they have the same length and each corresponding pair of elements is equal (using `eqg`). Arrays with different lengths are not equal.
+
+* **Tuples**: Two tuples are equal if they have the same attributes and each corresponding pair of attribute values is equal (using `eqg`).
+
+* **Bags**: Two bags are equal if every element that appears _n_ times in one bag also appears _n_ times in the other bag (using `eqg`).
+
+Similar to SQL, when one of the operands is `NULL`, the result is `NULL`. When one of the operands is `MISSING`, the result is `MISSING`.
+
+TODO: Is the output NULL or MISSING for the above?
+
+[[sec:order-by-less-than-ops]]
+==== Order-By Less-Than Function
+
+TODO: Move this somewhere else
+
+[[sec:logical-ops]]
+=== Logical Operators
+
+[[sec:null-predicate]]
+==== IS NULL
+
+If the operand is the null or missing value, the result is true. Otherwise, the result is false.
+
+[[sec:missing-predicate]]
+==== IS MISSING
+
+If the operand is the missing value, the result is true. Otherwise, the result is false.
+
+[[sec:connectives]]
+==== Connectives (AND, OR, NOT)
+
+PartiQL's boolean connectives (AND, OR, NOT) follow SQL's 3-valued logic. When an operand is `MISSING`, it is treated as if it were `NULL`.
+
+[[sec:aggregate-funcs]]
+=== Aggregate Functions
+
+TODO
+
+[[sec:collection-funcs]]
+=== Collection Functions and Operators
+
+PartiQL provides operators for navigating and manipulating collections (arrays and bags).
+
+[[sec:indexing-op]]
+==== Indexing Operator
+
+The _indexing operator_ `a[i]` returns the `i`-th element when applied to an array `a`, where both `a` and `i` are expressions. The expression `i` must evaluate to an integer.
+
+[source, ebnf]
+----
+index_operator = expression "[" expression "]"
+----
+
+where the first `expression` evaluates to an array and the second `expression` evaluates to an integer.
+
+In permissive mode, an array navigation evaluation `a[i]` returns `MISSING` if:
+
+* `a` does not evaluate to an array, or
+* `i` does not evaluate to a positive integer within the array's bounds.
+
+In type checking mode, the query fails in each of the cases above.
+
+[[sec:coll-spread-op]]
+==== Collection Spread Operator
+
+The _collection spread operator_ `[*]` converts a collection into a bag containing the same elements.
+
+[source, ebnf]
+----
+collection_spread_operator = expression "[" "*" "]"
+----
+
+where `expression` evaluates to a collection. The expression `e[*]` is equivalent to:
+
+[source, partiql]
+----
+SELECT VALUE v FROM e AS v
+----
+
+where `v` is a fresh variable (i.e., a variable that does not already appear in the query). Type checking follows the semantics of the equivalent query.
+
+[[sec:tuple-funcs]]
+=== Tuple Functions and Operators
+
+PartiQL provides operators for navigating and manipulating tuples.
+
+[[sec:tupleunion-func]]
+==== TUPLEUNION
+
+The `TUPLEUNION` function combines multiple tuples into a single tuple.
+
+[source, ebnf]
+----
+tupleunion = "TUPLEUNION" "(" expression { "," expression } ")"
+----
+
+where each `expression` evaluates to a tuple. The function outputs a tuple that contains all attribute-value pairs from all input tuples. If multiple input tuples have the same attribute name, the resulting tuple may contain duplicate attribute names.
+
+This function is used internally in the semantics of `SELECT` clause items that include `.*` expressions.
+
+[[sec:path-op]]
+==== Field Access Operator
+
+The _field access operator_ accesses an attribute value from a tuple.
+
+[source, ebnf]
+----
+field_access_operator = expression "." identifier
+                        | expression "[" string_literal "]"
+                        | expression "[" "CAST" "(" expression "AS" "STRING" ")" "]"
+----
+
+where `expression` evaluates to a tuple. In the first form, `identifier` is an attribute name. In the second form, `string_literal` is an attribute name. In the third form, the second `expression` is explicitly cast to a string representing an attribute name.
+
+The expression `t[s]` where `s` is a string literal or an expression explicitly cast to a string is equivalent to the tuple path navigation `t.s`. Without an explicit cast, `t[e]` is evaluated as array navigation, even if `e` evaluates to a string at runtime.
+
+When a tuple has multiple attributes with the same name, the tuple path navigation returns the first instance of that attribute. For tuples whose order is defined by schema, this is well-defined; for unordered tuples, it is implementation-defined in permissive mode or results in an error in type checking mode.
+
+In permissive mode, tuple path navigation returns `MISSING` if:
+
+* `t` does not evaluate to a tuple, or
+* `t` does not have an attribute named `a`.
+
+In type checking mode, the query fails in each of the cases above. In the presence of schema, an implementation may provide compile-time errors when a path expression is guaranteed to always produce `MISSING`.
+
+[[sec:tuple-spread-op]]
+==== Tuple Spread Operator
+
+The _tuple spread operator_ `.*` accesses all attribute values from a tuple and returns them as a collection.
+
+[source, ebnf]
+----
+tuple_spread_operator = expression "." "*"
+----
+
+where `expression` evaluates to a tuple. When the expression `e.*` is not a `SELECT` clause item of the form `t.*` where `t` is a variable, it is equivalent to:
+
+[source, partiql]
+----
+SELECT VALUE v FROM UNPIVOT e AS v
+----
+
+where `v` is a fresh variable (i.e., a variable that does not already appear in the query). Type checking follows the semantics of the equivalent query.
+
+When used as `t.*` in a `SELECT` clause, the operator has special semantics for SQL compatibility (see `SELECT` clause semantics).
+
+[[sec:type-check-funcs]]
+=== Type Checking Functions
+
+TODO
+
+[[sec:path-coll-ops]]
+=== Path Collection Expressions
+
+TODO: Document multi-step path expressions with wildcards (combinations of `[*]` and `.*` steps).
+
+[[sec:op-precedence]]
+=== Operator Precedence
+
+TODO

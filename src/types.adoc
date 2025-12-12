@@ -1,0 +1,22 @@
+[[sec:data-types]]
+== Data Types
+
+PartiQL supports a rich type system that extends SQL's type system to accommodate semi-structured and nested data. The type system is designed to be compatible with both SQL's traditional scalar types and Ion's comprehensive type system, enabling PartiQL to work with both relational and semi-structured data.
+
+include::types_numeric.adoc[]
+
+include::types_char.adoc[]
+
+include::types_datetime.adoc[]
+
+include::types_boolean.adoc[]
+
+include::types_binary.adoc[]
+
+include::types_tuple.adoc[]
+
+include::types_collection.adoc[]
+
+include::types_absent.adoc[]
+
+include::types_external.adoc[]
