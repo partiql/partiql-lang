@@ -1,27 +1,6 @@
 [[sec:introduction]]
 == Introduction
 
-[discrete]
-=== Draft Status
-
-This document is currently a working draft and subject to change.
-Certain sections are marked as "`work in progress`" (WIP) and will be
-expanded soon.
-
-[[sec:document-purpose-and-audience]]
-=== Document Purpose and Audience
-
-This document presents the formal syntax and semantics of PartiQL. It serves as the authoritative reference for PartiQL query processor builders who need the full and formal detail on PartiQL implementation. The specification defines the precise behavior of PartiQL queries, including the semantics of each clause, the treatment of data types, and the interaction between different language features.
-
-The primary audience for this specification includes:
-
-* Query processor and database engine developers implementing PartiQL
-* Language designers and standards committee members working on PartiQL evolution
-* Tool developers building query analyzers, optimizers, and validators
-* Advanced users requiring deep understanding of PartiQL semantics
-
-SQL users who are not interested in the full detail and the complete formalism but are interested in learning how PartiQL extends SQL may also read the tutorial. Unlike this formal specification, the tutorial has a "`how to`" orientation and is primarily driven by examples.
-
 [[sec:partiql-core-vs-syntactic-sugar]]
 === PartiQL Core vs. Syntactic Sugar
 

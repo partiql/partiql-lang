@@ -1,3 +1,4 @@
+[appendix]
 [[sec:appendix]]
 == Appendix
 

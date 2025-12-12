@@ -33,6 +33,7 @@ The PartiQL Specification Committee
 
 
 include::license.adoc[]
+include::preamble.adoc[]
 include::introduction.adoc[]
 include::gradual_typing.adoc[]
 include::execution_modes.adoc[]
