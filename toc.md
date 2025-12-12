@@ -61,13 +61,15 @@
    6.10. Handling Functions with Wrong Input Types  
 
 ## 6. PartiQL Query Syntax
-   7.1. Query Structure (SFW Queries)  
+   7.1. Query Structure
+   7.2  Query Execution Order
    7.2. FROM Clause
-   &nbsp;&nbsp;&nbsp;&nbsp;7.2.1. Ranging Over Collections  
-   &nbsp;&nbsp;&nbsp;&nbsp;7.2.2. UNPIVOT  
-   &nbsp;&nbsp;&nbsp;&nbsp;7.2.3. JOIN Operations (CROSS JOIN, LEFT JOIN, FULL JOIN)  
-   &nbsp;&nbsp;&nbsp;&nbsp;7.2.4. AT Clause for Position Variables  
-   &nbsp;&nbsp;&nbsp;&nbsp;7.2.5. LATERAL keyword  
+     - Database objects and collections
+     - Typing
+     - AT for positional
+     - UNPIVOT
+   7.3. JOINs
+     - (CROSS JOIN, LEFT JOIN, FULL JOIN). LATERAL.
    7.3. LET Clause
    7.4. WHERE Clause  
    7.5. GROUP BY Clause  
@@ -75,27 +77,28 @@
    &nbsp;&nbsp;&nbsp;&nbsp;7.5.2. SQL Compatibility Features  
    &nbsp;&nbsp;&nbsp;&nbsp;7.5.3. Aggregate Functions in GROUP BY  
    &nbsp;&nbsp;&nbsp;&nbsp;7.5.4. HAVING Clause  
+   7.5  SELECT VALUE Clause
    7.6. SELECT Clause  
-   &nbsp;&nbsp;&nbsp;&nbsp;7.6.1. SELECT VALUE (Core)  
    &nbsp;&nbsp;&nbsp;&nbsp;7.6.2. SQL SELECT (Syntactic Sugar)  
    &nbsp;&nbsp;&nbsp;&nbsp;7.6.3. SELECT * Semantics  
-   &nbsp;&nbsp;&nbsp;&nbsp;7.6.4. Tuple/Array/Bag Constructors  
+   &nbsp;&nbsp;&nbsp;&nbsp;7.6.4. Tuple/Array/Bag Constructors  (should this go here?)
    7.7. PIVOT Clause  
    7.8. ORDER BY Clause  
    &nbsp;&nbsp;&nbsp;&nbsp;7.8.1. ORDER BY Semantics  
    &nbsp;&nbsp;&nbsp;&nbsp;7.8.2. ASC/DESC and NULLS FIRST/LAST  
    &nbsp;&nbsp;&nbsp;&nbsp;7.8.3. PRESERVE Directive  
    7.9. LIMIT and OFFSET Clauses  
-   7.10. Set Operations  
-   &nbsp;&nbsp;&nbsp;&nbsp;7.10.1. UNION (ALL)  
-   &nbsp;&nbsp;&nbsp;&nbsp;7.10.2. INTERSECT (ALL)  
-   &nbsp;&nbsp;&nbsp;&nbsp;7.10.3. EXCEPT (ALL)  
    7.11. WITH Clause (Common Table Expressions)  
 
 ## 7. Subqueries and Subquery Coercion
    8.1. Scalar Subqueries  
    8.2. Collection Subqueries  
-   8.3. Subquery Coercion Rules  
+   8.3. Subquery Coercion Rules
+
+## 8. Set Operations
+   8.1. UNION (ALL)  
+   8.2. INTERSECT (ALL)  
+   8.3. EXCEPT (ALL)  
 
 ## Appendices
    A. Grammar Reference (Complete EBNF)  
