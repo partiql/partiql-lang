@@ -40,15 +40,7 @@ Name resolution in PartiQL follows these fundamental principles:
 
 4. **Compilation Failure**: When a name cannot be resolved in either environment, the query fails at compilation time.
 
-[[sec:variable-variable-resolution]]
-=== Variable-to-Variable Name Resolution
-
-When multiple variable bindings exist for the same name (due to nested queries), PartiQL follows standard lexical scoping rules: inner scopes shadow outer scopes.
-
-This shadowing behavior is realized through binding tuple concatenation, as defined in <<sec:binding-tuple-concatenation>>. When a subquery is evaluated within a variables environment stem:[p] and produces a binding tuple stem:[b], expressions within that subquery are evaluated in the concatenated environment stem:[p || b].
-
-The right-precedence rule of concatenation ensures that variable bindings in stem:[b] (the inner scope) take precedence over synonymous variables in stem:[p] (the outer scope). This allows inner queries to define variables that shadow variables from enclosing queries.
-
+5. **Unique Variable Names**: The variables environment has no duplicate names because variable shadowing is handled by binding tuple concatenation's right-precedence rule during variables type environment concatenation (see <<sec:binding-tuple-concatenation>>), which occurs before name resolution.
 
 [[sec:at-prefix]]
 === The `@` Prefix
