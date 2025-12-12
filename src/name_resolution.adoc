@@ -43,7 +43,7 @@ Name resolution in PartiQL follows these fundamental principles:
 5. **Unique Variable Names**: The variables environment has no duplicate names because variable shadowing is handled by binding tuple concatenation's right-precedence rule during variables type environment concatenation (see <<sec:binding-tuple-concatenation>>), which occurs before name resolution.
 
 [[sec:at-prefix]]
-=== The `@` Prefix
+=== Variable-First Lookup
 
 The `@` prefix provides explicit control over name resolution. An expression of the form `@identifier` or `@identifier.path` requests the following resolution strategy:
 
@@ -67,7 +67,7 @@ When a path expression stem:[i_1.i_2. ... .i_n] consists of multiple identifiers
 
 The resolution rules extend the simple identifier rules to handle these cases:
 
-*With `@` Prefix:* For stem:[@i_1.i_2. ... .i_n]:
+*With `@` Prefix:* For stem:["@"i_1.i_2. ... .i_n]:
 
 1. First, attempt to resolve stem:[i_1] as a variable in stem:[p]. If successful, stem:[i_2. ... .i_n] represents attribute navigation from that variable.
 2. If stem:[i_1] is not a variable, attempt to resolve stem:[i_1.i_2. ... .i_m] (for stem:[m <= n]) as a database name in stem:[p_0]. If multiple matches exist, choose the longest match (largest stem:[m]). The remaining identifiers stem:[i_{m+1}. ... .i_n] represent attribute navigation.
