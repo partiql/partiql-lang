@@ -7,7 +7,7 @@ PartiQL supports two execution modes that control how the query processor handle
 [[sec:permissive-mode]]
 === Permissive Mode
 
-In *permissive mode*, PartiQL gracefully handles type mismatches and missing data, enabling queries to succeed even when operating on heterogeneous or incomplete data. This mode is designed for semi-structured and schema-less data sources where flexibility is paramount.
+In *permissive mode*, PartiQL gracefully handles type mismatches and missing data, enabling queries to succeed even when operating on heterogeneous or incomplete data. This mode is designed for semi-structured and dynamically typed data sources where flexibility is paramount.
 
 *Characteristics of Permissive Mode:*
 
@@ -67,7 +67,7 @@ The same query from the permissive mode example would fail in type checking mode
 The choice between permissive and type checking modes depends on the use case:
 
 * Use *permissive mode* for:
-  ** Semi-structured or schema-less data (JSON, Ion)
+  ** Semi-structured or dynamically typed data (JSON, Ion)
   ** Data integration across heterogeneous sources
   ** Exploratory queries on unfamiliar data
   ** Resilience to schema evolution

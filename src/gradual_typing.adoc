@@ -1,7 +1,7 @@
 [[sec:gradual-typing]]
 == Gradual Typing
 
-PartiQL supports _gradual typing_, which allows data to range from completely untyped (schema-less) to fully typed with structural types (schemas). This flexibility enables PartiQL to work effectively with both traditional relational databases with rigid schemas and modern semi-structured data stores without predefined schemas.
+PartiQL supports _gradual typing_, which allows data to range from completely untyped (dynamically typed) to statically typed. This flexibility enables PartiQL to work effectively with both traditional relational databases with rigid schemas and modern semi-structured data stores without predefined schemas.
 
 The gradual typing system provides several key benefits:
 
@@ -37,4 +37,4 @@ PartiQL implementations may employ type inference to derive type information eve
 * *Progressive Refinement*: Type information can be progressively refined as more context becomes available during query compilation and execution
 * *Error Prevention*: Inferred types can help catch certain classes of errors earlier in the query processing pipeline
 
-Type inference in PartiQL is conservative: when type information cannot be reliably inferred, the system defaults to treating values as having union types (capable of being any PartiQL type), maintaining the permissive behavior expected for schema-less data.
+Type inference in PartiQL is conservative: when type information cannot be reliably inferred, the system defaults to treating values as having union types (capable of being any PartiQL type), maintaining the permissive behavior expected for dynamically typed data.

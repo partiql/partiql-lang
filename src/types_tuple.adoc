@@ -48,7 +48,7 @@ identifier = letter, { letter | digit | "_" | "$" }
 PartiQL distinguishes between ordered and unordered tuples, though the distinction is typically determined by schema rather than syntax.
 
 *Unordered Tuples:*
-- Default behavior in schema-less contexts
+- Default behavior in dynamically typed contexts
 - Attribute order is not significant
 - `{'a': 1, 'b': 2}` equals `{'b': 2, 'a': 1}`
 - Attribute access by name only
