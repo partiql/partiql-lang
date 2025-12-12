@@ -36,6 +36,7 @@ Results in:
 ----
 
 Notice how:
+
 * The second tuple omits 'b' because `v.y` is `MISSING`
 * The third tuple omits 'b' because `'foo' * 2` returns `MISSING` (type mismatch)
 
@@ -59,6 +60,7 @@ In *type checking mode*, PartiQL enforces strict type checking and fails queries
 *Example in Type Checking Mode:*
 
 The same query from the permissive mode example would fail in type checking mode when processing the second and third tuples, as:
+
 * The second tuple lacks the 'y' attribute
 * The third tuple has a string 'x' value where numeric operations are applied
 

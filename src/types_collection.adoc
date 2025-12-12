@@ -24,16 +24,18 @@ array_value = "[", [ value, { ",", value } ], "]" ;
 ----
 
 *Characteristics:*
-- *Ordered*: Element order is significant and preserved
-- *Indexed*: Elements accessible by zero-based integer index
-- *Size*: Has explicit size (number of elements)
-- *Duplicates*: Multiple elements with same value allowed
-- *Heterogeneous*: Elements can have different types
+
+* *Ordered*: Element order is significant and preserved
+* *Indexed*: Elements accessible by zero-based integer index
+* *Size*: Has explicit size (number of elements)
+* *Duplicates*: Multiple elements with same value allowed
+* *Heterogeneous*: Elements can have different types
 
 *Storage:* Variable size depending on:
-- Number of elements
-- Types and sizes of element values
-- Indexing metadata
+
+* Number of elements
+* Types and sizes of element values
+* Indexing metadata
 
 *Examples:*
 [source, partiql]
@@ -75,16 +77,18 @@ bag_value = "<<", [ value, { ",", value } ], ">>" ;
 ----
 
 *Characteristics:*
-- *Unordered*: Element order is not significant
-- *No Indexing*: Elements not accessible by position
-- *Duplicates*: Multiple elements with same value allowed  
-- *Heterogeneous*: Elements can have different types
-- *SQL Compatibility*: SQL tables are bags of tuples
+
+* *Unordered*: Element order is not significant
+* *No Indexing*: Elements not accessible by position
+* *Duplicates*: Multiple elements with same value allowed  
+* *Heterogeneous*: Elements can have different types
+* *SQL Compatibility*: SQL tables are bags of tuples
 
 *Storage:* Variable size depending on:
-- Number of elements
-- Types and sizes of element values
-- No ordering metadata needed
+
+* Number of elements
+* Types and sizes of element values
+* No ordering metadata needed
 
 *Examples:*
 [source, partiql]

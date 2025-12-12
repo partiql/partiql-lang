@@ -25,8 +25,9 @@ PartiQL supports temporal data types for representing dates, times, and timestam
 |===
 
 *Precision:*
-- Precision p specifies the number of fractional second digits (0-9)
-- Default precision is implementation-defined (typically 6 for microseconds)
+
+* Precision p specifies the number of fractional second digits (0-9)
+* Default precision is implementation-defined (typically 6 for microseconds)
 
 TODO: Remove Ion syntax below. Replace with SQL syntax.
 *EBNF Syntax for Timestamp Literals:*

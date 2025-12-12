@@ -25,9 +25,10 @@ PartiQL supports text data using Unicode character strings. String types are var
 |===
 
 *Character Encoding:*
-- Strings are Unicode character sequences
-- Internal representation is implementation-defined (UTF-8, UTF-16, etc.)
-- Each character is a Unicode code point (21 bits effective range: U+0000 to U+10FFFF)
+
+* Strings are Unicode character sequences
+* Internal representation is implementation-defined (UTF-8, UTF-16, etc.)
+* Each character is a Unicode code point (21 bits effective range: U+0000 to U+10FFFF)
 
 *EBNF Syntax for String Literals:*
 [source, ebnf]

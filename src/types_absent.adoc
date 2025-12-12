@@ -27,10 +27,11 @@ absent_value = "NULL" | "null" | "MISSING" ;
 `NULL` represents an explicit null value, compatible with SQL's NULL semantics.
 
 *Characteristics:*
-- Explicit presence of unknown/inapplicable value
-- Can be stored as attribute value in tuples
-- Participates in SQL three-valued logic
-- `NULL = NULL` is not TRUE (returns NULL in SQL semantics)
+
+* Explicit presence of unknown/inapplicable value
+* Can be stored as attribute value in tuples
+* Participates in SQL three-valued logic
+* `NULL = NULL` is not TRUE (returns NULL in SQL semantics)
 
 *Examples:*
 [source, partiql]
@@ -46,11 +47,12 @@ NULL > 0                             -- Returns: NULL (or false in boolean conte
 `MISSING` represents the absence of data, typical in semi-structured data where attributes may not exist.
 
 *Characteristics:*
-- Indicates data is not present
-- *Cannot* be stored as attribute value in tuples (omitted instead)
-- Can appear in arrays and bags
-- Path navigation to non-existent attribute returns MISSING
-- Operations on MISSING typically return MISSING
+
+* Indicates data is not present
+* *Cannot* be stored as attribute value in tuples (omitted instead)
+* Can appear in arrays and bags
+* Path navigation to non-existent attribute returns MISSING
+* Operations on MISSING typically return MISSING
 
 *Examples:*
 [source, partiql]

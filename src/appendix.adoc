@@ -295,38 +295,44 @@ FROM coll AS v, @v.foo AS w,
 *Name Resolution Analysis:*
 
 1. **`v.foo` in SELECT clause (line 1)**:
-   - Non-FROM context, so variables-first
-   - Variable `v` exists (bound by FROM clause)
-   - Resolves to attribute `foo` of variable `v`
+
+** Non-FROM context, so variables-first
+** Variable `v` exists (bound by FROM clause)
+** Resolves to attribute `foo` of variable `v`
 
 2. **`coll` in FROM clause (line 2)**:
-   - Immediately nested in FROM clause, so database-first
-   - Database name `coll` exists in stem:[p_0]
-   - Resolves to database collection `coll`
+
+** Immediately nested in FROM clause, so database-first
+** Database name `coll` exists in stem:[p_0]
+** Resolves to database collection `coll`
 
 3. **`@v.foo` in FROM clause (line 2)**:
-   - The `@` prefix forces variables-first resolution
-   - Variable `v` exists in stem:[p]
-   - Resolves to attribute `foo` of variable `v`
-   - Without the `@`, this would resolve to database name `v.foo` (due to FROM clause database-first rule)
+
+** The `@` prefix forces variables-first resolution
+** Variable `v` exists in stem:[p]
+** Resolves to attribute `foo` of variable `v`
+** Without the `@`, this would resolve to database name `v.foo` (due to FROM clause database-first rule)
 
 4. **`@w.bar` in inner FROM clause (line 3)**:
-   - The `@` prefix forces variables-first resolution
-   - Variable `w` exists (bound in line 2)
-   - Resolves to attribute `bar` of variable `w`
-   - This is immediately nested in the inner FROM clause
+
+** The `@` prefix forces variables-first resolution
+** Variable `w` exists (bound in line 2)
+** Resolves to attribute `bar` of variable `w`
+** This is immediately nested in the inner FROM clause
 
 5. **`w.a` in inner SELECT clause (line 3)**:
-   - Non-FROM context, so variables-first
-   - Variable `w` exists in the environment
-   - Resolves to attribute `a` of variable `w`
-   - Note: `w.a` is NOT immediately nested in the outer FROM clause. It appears within a subquery in the FROM clause, but it's immediately nested in the subquery's SELECT clause.
+
+** Non-FROM context, so variables-first
+** Variable `w` exists in the environment
+** Resolves to attribute `a` of variable `w`
+** Note: `w.a` is NOT immediately nested in the outer FROM clause. It appears within a subquery in the FROM clause, but it's immediately nested in the subquery's SELECT clause.
 
 6. **`u.b` in inner SELECT clause (line 3)**:
-   - Non-FROM context, so variables-first
-   - Variable `u` exists (bound by inner FROM)
-   - Resolves to attribute `b` of variable `u`
-   - Also not immediately nested in the outer FROM
+
+** Non-FROM context, so variables-first
+** Variable `u` exists (bound by inner FROM)
+** Resolves to attribute `b` of variable `u`
+** Also not immediately nested in the outer FROM
 
 *Key Observations:*
 
@@ -470,7 +476,7 @@ Since this is in a SELECT clause (non-FROM), resolution is variables-first:
 
 * Try `db` as a variable: Not found
 * Try longest database name match starting with `db`:
-  - Try `db.schema.table` as database name: Match found (length 3)
+** Try `db.schema.table` as database name: Match found (length 3)
 
 The path resolves as: database name `db.schema.table`, then attribute navigation `.col`.
 
@@ -734,9 +740,10 @@ B_WHERE^in = <<
 ----
 
 Condition evaluation:
-- For s.id=1: `72.5 > 70` → true ✓
-- For s.id=2: `68.3 > 70` → false ✗
-- For s.id=3: `71.0 > 70` → true ✓
+
+* For s.id=1: `72.5 > 70` → true ✓
+* For s.id=2: `68.3 > 70` → false ✗
+* For s.id=3: `71.0 > 70` → true ✓
 
 Output:
 [source%unbreakable]
@@ -778,9 +785,10 @@ WHERE r.status = 'active'
 ----
 
 *Evaluation:*
-- Sensor 1: `'active' = 'active'` → true ✓
-- Sensor 2: `NULL = 'active'` → NULL (excluded) ✗
-- Sensor 3: `MISSING = 'active'` → MISSING (excluded) ✗
+
+* Sensor 1: `'active' = 'active'` → true ✓
+* Sensor 2: `NULL = 'active'` → NULL (excluded) ✗
+* Sensor 3: `MISSING = 'active'` → MISSING (excluded) ✗
 
 Result:
 [source%unbreakable, partiql]
@@ -1105,8 +1113,9 @@ B_PIVOT^in = <<
 ----
 
 For each binding tuple, evaluate name (p.ticker) and value (p.price):
-- First: name='AMZN', value=840.05
-- Second: name='GOOG', value=1250.30
+
+* First: name='AMZN', value=840.05
+* Second: name='GOOG', value=1250.30
 
 Output (single tuple):
 [source%unbreakable, partiql]

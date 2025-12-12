@@ -28,10 +28,11 @@ identifier = letter, { letter | digit | "_" | "$" }
 ----
 
 *Storage:* Variable size depending on:
-- Number of attributes
-- Names of attributes (string length)
-- Types and values of attribute values
-- Ordering information (if ordered tuple)
+
+* Number of attributes
+* Names of attributes (string length)
+* Types and values of attribute values
+* Ordering information (if ordered tuple)
 
 *Examples:*
 [source, partiql]
@@ -48,17 +49,19 @@ identifier = letter, { letter | digit | "_" | "$" }
 PartiQL distinguishes between ordered and unordered tuples, though the distinction is typically determined by type definitions rather than syntax.
 
 *Unordered Tuples:*
-- Default behavior in dynamically typed contexts
-- Attribute order is not significant
-- `{'a': 1, 'b': 2}` equals `{'b': 2, 'a': 1}`
-- Attribute access by name only
+
+* Default behavior in dynamically typed contexts
+* Attribute order is not significant
+* `{'a': 1, 'b': 2}` equals `{'b': 2, 'a': 1}`
+* Attribute access by name only
 
 *Ordered Tuples:*
-- Specified by type definitions
-- Attribute order is significant and preserved
-- Positional access may be available (implementation-defined)
-- SQL tables with defined column order produce ordered tuples
-- Attribute order affects iteration and certain operations
+
+* Specified by type definitions
+* Attribute order is significant and preserved
+* Positional access may be available (implementation-defined)
+* SQL tables with defined column order produce ordered tuples
+* Attribute order affects iteration and certain operations
 
 *Schema Declaration:*
 [source, sql]
@@ -77,15 +80,17 @@ CREATE TABLE users (
 ==== Attribute Names and Values
 
 *Attribute Names:*
-- Must be strings (any Unicode string)
-- Can be identifiers or quoted strings
-- Can be computed dynamically using expressions
-- Case-sensitive by default (implementation may vary)
+
+* Must be strings (any Unicode string)
+* Can be identifiers or quoted strings
+* Can be computed dynamically using expressions
+* Case-sensitive by default (implementation may vary)
 
 *Attribute Values:*
-- Can be any PartiQL type (scalars, collections, tuples)
-- Can be NULL (but not MISSING - see special handling below)
-- Fully heterogeneous: different tuples can have different value types for same attribute name
+
+* Can be any PartiQL type (scalars, collections, tuples)
+* Can be NULL (but not MISSING - see special handling below)
+* Fully heterogeneous: different tuples can have different value types for same attribute name
 
 *MISSING Attributes:*
 When constructing tuples, if an attribute value evaluates to `MISSING`, the attribute is omitted entirely from the tuple rather than being included with a MISSING value.
@@ -110,10 +115,11 @@ When constructing tuples, if an attribute value evaluates to `MISSING`, the attr
 PartiQL allows duplicate attribute names within tuples for compatibility with non-strict JSON/Ion datasets, though this is not encouraged.
 
 *Behavior with Duplicates:*
-- Tuples may contain multiple attributes with the same name
-- Path navigation `t.attr` returns the *first* occurrence (for ordered tuples) or an implementation-defined occurrence (for unordered tuples)
-- Deep equality compares all attributes, including duplicates
-- `UNPIVOT` can access all occurrences
+
+* Tuples may contain multiple attributes with the same name
+* Path navigation `t.attr` returns the *first* occurrence (for ordered tuples) or an implementation-defined occurrence (for unordered tuples)
+* Deep equality compares all attributes, including duplicates
+* `UNPIVOT` can access all occurrences
 
 *Ordered Tuples:* First occurrence is well-defined based on order defined by type definitions.
 
