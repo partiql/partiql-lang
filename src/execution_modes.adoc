@@ -2,7 +2,7 @@
 [[sec:execution-modes]]
 == Execution Modes
 
-PartiQL supports two execution modes that control how the query processor handles type mismatches and type violations: _permissive mode_ and _type checking mode_. The choice between these modes affects query behavior when operations encounter data that doesn't match expected types or structures.
+PartiQL supports two execution modes that control how the query processor handles runtime type mismatches and type violations: _permissive mode_ and _type checking mode_. The choice between these modes affects query behavior when operations encounter data that doesn't match expected types or structures.
 
 [[sec:permissive-mode]]
 === Permissive Mode
