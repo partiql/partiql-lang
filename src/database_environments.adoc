@@ -3,8 +3,8 @@
 
 PartiQL queries are evaluated within an _environment_ that provides bindings for database objects and query variables. This section establishes the foundational concepts of environments and binding tuples that underpin PartiQL's evaluation semantics.
 
-[[sec:environments-binding-tuples]]
-=== Environments and Binding Tuples
+[[sec:environments]]
+=== Environments
 
 Each PartiQL query or subexpression stem:[q] is evaluated within a _bindings environment_ consisting of two distinct components:
 
@@ -12,15 +12,6 @@ Each PartiQL query or subexpression stem:[q] is evaluated within a _bindings env
 * The _variables environment_ stem:[p], which contains bindings for query variables
 
 The pair stem:[(p_0, p)] collectively forms the bindings environment in which stem:[q] is evaluated.
-
-An environment is represented as a _binding tuple_ of the form:
-
-[stem]
-++++
-<<x_1:v_1, ..., x_n:v_n>>
-++++
-
-where each stem:[x_i] is a unique _bind name_ that binds to a PartiQL _value_ stem:[v_i].
 
 The two environments serve distinct purposes, analogous to global and local scopes in lexical scoping:
 
@@ -37,7 +28,28 @@ For example, consider the expression `x + y / 2` evaluated with database environ
 (p_0, p) |-- "x + y / 2" -> "5 + 3 / 2" -> 4
 ++++
 
-*Representation of binding tuples:* A binding tuple explicitly represents all variables in its scope, including those with `MISSING` values. For example, stem:[<<x:1, y:"MISSING">>] explicitly shows that variable stem:[y] exists but has value `MISSING`, which differs from stem:[<<x:1>>] where stem:[y] is not present in the binding at all. This distinction is important for correctly evaluating variable references and maintaining semantic precision.
+[[sec:binding-tuples]]
+=== Binding Tuples
+
+An environment is represented as a _binding tuple_ of the form:
+
+[stem]
+++++
+<<x_1:v_1, ..., x_n:v_n>>
+++++
+
+where each stem:[x_i] is a unique _bind name_ that binds to a PartiQL _value_ stem:[v_i].
+
+A binding tuple explicitly represents all variables in its scope, including those with `MISSING` values. For example, stem:[<<x:1, y:"MISSING">>] explicitly shows that variable stem:[y] exists but has value `MISSING`, which differs from stem:[<<x:1>>] where stem:[y] is not present in the binding at all. This distinction is important for correctly evaluating variable references and maintaining semantic precision.
+
+[[sec:binding-tuple-concatenation]]
+=== Binding Tuple Concatenation
+
+Binding tuples can be concatenated to form extended environments. Given two binding tuples stem:[b] and stem:[b'], their concatenation stem:[b || b'] produces a new binding tuple that contains the variable bindings from both stem:[b] and stem:[b'].
+
+When both binding tuples contain a binding for the same variable stem:[x], the concatenation stem:[b || b'] retains the binding from the right operand stem:[b']. That is, the right operand takes precedence in the case of naming conflicts.
+
+This concept will be applied in subsequent sections when describing how binding tuples flow through query clauses and how nested queries access variables from enclosing queries.
 
 [[sec:type-environments]]
 === Type Environments
