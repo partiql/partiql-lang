@@ -1,144 +1,40 @@
 [[sec:external-type-systems]]
-=== External Type Systems
+=== External Data Models
 
-PartiQL's type system is designed to be compatible with Amazon Ion's type system, enabling seamless integration with Ion data.
+PartiQL's type system is designed to be flexible and expressive enough to represent data from diverse sources, each with their own data models and type systems. This design enables interoperability across a wide range of data formats and sources.
 
-==== Ion Type Mapping
+==== Flexible Type System Design
 
-PartiQL types map directly to Ion types:
+PartiQL's type system is designed to accommodate a wide variety of data sources, including both structured and semi-structured data formats. This flexibility allows PartiQL implementations to work with data from multiple sources through a unified query interface.
 
-[cols="2,2,3", options="header"]
-|===
-|PartiQL Type |Ion Type |Notes
+The PartiQL type system includes:
 
-|NULL
-|null
-|Direct mapping
+* **Scalar types**: Integers, decimals, floating-point numbers, strings, timestamps, booleans, and binary types
+* **Complex types**: Tuples (structures), arrays (ordered collections), and bags (unordered collections)
+* **Absent values**: NULL and MISSING to represent different kinds of absent data
+* **Nested structures**: Arbitrary composition of tuples, arrays, and bags to represent hierarchical data
 
-|BOOLEAN
-|bool
-|Direct mapping
+This rich type system enables PartiQL to represent data from various sources while maintaining a consistent query interface.
 
-|Integer types
-|int
-|Ion int is arbitrary precision
+==== Data Source Compatibility
 
-|DECIMAL
-|decimal
-|Ion decimal is arbitrary precision
+PartiQL implementations can map data from diverse sources to PartiQL's type system. Examples of data formats and sources that can be queried using PartiQL include:
 
-|FLOAT/DOUBLE
-|float
-|Ion float is IEEE 754 binary64
+* **Amazon Ion**: A richly-typed, self-describing data format with support for arbitrary precision numerics, annotations, and multiple encoding formats
+* **JSON**: The ubiquitous semi-structured data format widely used in web services and document stores
+* **Apache Parquet**: A columnar storage format commonly used in data lakes and analytical workloads
+* **Apache Arrow**: An in-memory columnar data format designed for efficient analytical operations
+* **Relational databases**: Traditional SQL databases with fixed schemas
+* **Other structured and semi-structured formats**: CSV, XML, Avro, and more
 
-|STRING/VARCHAR
-|string
-|Direct mapping
+The mapping between these external formats and PartiQL's type system is the responsibility of PartiQL implementations. Different implementations may provide specific features or optimizations for particular data sources, but the PartiQL language specification remains independent of any external type system.
 
-|SYMBOL
-|symbol
-|Ion-specific: interned strings
+==== Implementation Considerations
 
-|TIMESTAMP
-|timestamp
-|Ion timestamp with arbitrary precision
+When a PartiQL implementation maps external data to PartiQL's type system, it must ensure that:
 
-|BLOB
-|blob
-|Direct mapping
+1. **Type preservation**: The semantics and precision of the original data are maintained where possible
+2. **Query consistency**: Queries produce predictable results regardless of the underlying data source
+3. **Interoperability**: Data from different sources can be queried and combined using the same PartiQL syntax
 
-|CLOB
-|clob
-|Direct mapping
-
-|TUPLE/STRUCT
-|struct
-|Direct mapping
-
-|ARRAY
-|list
-|Ion lists are equivalent to PartiQL arrays
-
-|BAG
-|bag (not native)
-|Represented as list with bag semantics
-|===
-
-==== Ion Literals in PartiQL
-
-PartiQL supports Ion literal syntax using backtick quotation:
-
-*EBNF Syntax:*
-[source, ebnf]
-----
-ion_literal = "`", ion_value, "`" ;
-
-ion_value = ? Any valid Ion value ? ;
-----
-
-*Examples:*
-[source, partiql]
-----
-`null`                               -- Ion null
-`true`                               -- Ion bool
-`42`                                 -- Ion int
-`3.14159265358979323846d`           -- Ion decimal (arbitrary precision)
-`2023-12-25T14:30:00.123456Z`       -- Ion timestamp
-`"Hello, Ion!"`                     -- Ion string
-`'symbol'`                           -- Ion symbol
-`{a: 1, b: 2}`                      -- Ion struct
-`[1, 2, 3]`                         -- Ion list
-`{{ DEADBEEF }}`                    -- Ion blob
-----
-
-==== Type Annotations
-
-Ion supports type annotations, which are preserved in PartiQL when using Ion literals:
-
-*Examples:*
-[source, partiql]
-----
-`dollars::100.00`                    -- Annotated decimal
-`coordinates::{x: 10, y: 20}`       -- Annotated struct
-`rgb::[255, 128, 0]`                -- Annotated list
-----
-
-==== Benefits of Ion Integration
-
-1. *Arbitrary Precision*: Ion's arbitrary precision integers and decimals available in PartiQL
-2. *Rich Timestamps*: Ion timestamps preserve timezone and fractional seconds
-3. *Efficient Symbols*: Interned strings for repeated values
-4. *Type Annotations*: Domain-specific type information preserved
-5. *Binary Format*: Efficient binary encoding for Ion data
-6. *Self-Describing*: Ion format includes type information
-
-==== SQL vs. Ion Literals
-
-PartiQL accepts both SQL-style literals and Ion literals:
-
-[cols="2,2,2", options="header"]
-|===
-|Value |SQL Literal |Ion Literal
-
-|String
-|`'hello'`
-|`` `"hello"` ``
-
-|Integer
-|`42`
-|`` `42` ``
-
-|Decimal
-|`3.14`
-|`` `3.14d` ``
-
-|Timestamp
-|`TIMESTAMP '2023-12-25'`
-|`` `2023-12-25T` ``
-
-|Null
-|`NULL`
-|`` `null` ``
-|===
-
-For maximum compatibility and precision, Ion literals (using backticks) are recommended when working with Ion data sources.
+The specific details of how external data formats are mapped to PartiQL types are implementation-specific and not part of the PartiQL language specification.
