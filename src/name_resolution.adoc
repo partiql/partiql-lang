@@ -1,0 +1,166 @@
+[[sec:name-resolution]]
+== Name Resolution
+
+PartiQL queries reference names from both the database environment and the variables environment. This section defines the rules that determine how name references are resolved when both environments may contain names, and establishes the precedence rules that ensure unambiguous name resolution.
+
+[[sec:name-resolution-overview]]
+=== Overview
+
+Name resolution in PartiQL addresses the challenge of disambiguating references when:
+
+* A name may exist in both the database environment stem:[p_0] and the variables environment stem:[p]
+* Nested queries create multiple layers of variable bindings
+* Path expressions introduce additional complexity in determining which environment a name belongs to
+
+PartiQL's name resolution rules are designed to provide predictable, unambiguous semantics while supporting both traditional database access patterns and the needs of navigating nested data structures.
+
+[[sec:name-reference-forms]]
+=== Name Reference Forms
+
+PartiQL supports several forms of name references, each with distinct resolution semantics:
+
+*Simple identifiers* consist of a single identifier, such as `x`, `customer`, or `orders`. Simple identifiers may refer to either database objects or query variables, depending on the resolution context.
+
+*Qualified names* consist of multiple identifiers separated by dots, such as `mydb.log` or `schema.table.column`. Qualified names appear only in the database environment stem:[p_0] and represent hierarchical database structures.
+
+*Path expressions* extend an initial name reference with attribute navigation or collection indexing, such as `x.a.b` or `customer.address.city`. Path expressions complicate name resolution because the initial identifier must be resolved before the path can be traversed.
+
+*Explicit variable references* use the `@` prefix to force a specific resolution strategy. The form `@identifier` or `@identifier.path` indicates an explicit request to resolve the name through the variables environment first.
+
+[[sec:resolution-principles]]
+=== Fundamental Resolution Principles
+
+Name resolution in PartiQL follows these fundamental principles:
+
+1. **Dual Environment**: Names are resolved by searching first one environment, then the other, with the search order determined by the resolution context.
+
+2. **Context-Dependent Precedence**: The precedence between database and variables environments depends on where the name reference appears in the query. FROM clause expressions follow different rules than expressions in other clauses.
+
+3. **Explicit Control**: The `@` prefix allows explicit control over resolution strategy, forcing variables-first lookup.
+
+4. **Compilation Failure**: When a name cannot be resolved in either environment, the query fails at compilation time.
+
+[[sec:variable-variable-resolution]]
+=== Variable-to-Variable Name Resolution
+
+When multiple variable bindings exist for the same name (due to nested queries), PartiQL follows standard lexical scoping rules: inner scopes shadow outer scopes.
+
+This shadowing behavior is realized through binding tuple concatenation, as defined in <<sec:binding-tuple-concatenation>>. When a subquery is evaluated within a variables environment stem:[p] and produces a binding tuple stem:[b], expressions within that subquery are evaluated in the concatenated environment stem:[p || b].
+
+The right-precedence rule of concatenation ensures that variable bindings in stem:[b] (the inner scope) take precedence over synonymous variables in stem:[p] (the outer scope). This allows inner queries to define variables that shadow variables from enclosing queries.
+
+[[sec:database-variable-resolution]]
+=== Database-to-Variable Name Resolution
+
+When a name may refer to either a database object or a query variable, PartiQL applies context-dependent resolution rules.
+
+[[sec:at-prefix]]
+==== The `@` Prefix
+
+The `@` prefix provides explicit control over name resolution. An expression of the form `@identifier` or `@identifier.path` requests the following resolution strategy:
+
+1. First, attempt to resolve `identifier` as a variable in the variables environment stem:[p]
+2. If no such variable exists, attempt to resolve as a database name in stem:[p_0]
+3. If neither resolution succeeds, the query fails compilation
+
+The `@` prefix is necessary when:
+
+* A FROM clause needs to reference a variable rather than a database name (since FROM clauses default to database-first resolution)
+* Disambiguation is needed to ensure a specific resolution path is taken
+
+[[sec:simple-identifier-resolution]]
+==== Simple Identifier Resolution
+
+For simple identifiers (not prefixed with `@`), resolution depends on the clause context:
+
+*FROM Clause Resolution:* In a FROM clause path, an identifier is resolved as follows:
+
+1. First, attempt to resolve as a database name in stem:[p_0]
+2. If no such database name exists, attempt to resolve as a variable in stem:[p]
+3. If neither resolution succeeds, the query fails compilation
+
+*Non-FROM Clause Resolution:* In expressions outside FROM clauses (such as SELECT, WHERE, GROUP BY), an identifier is resolved as follows:
+
+1. First, attempt to resolve as a variable in stem:[p]
+2. If no such variable exists, attempt to resolve as a database name in stem:[p_0]
+3. If neither resolution succeeds, the query fails compilation
+
+The asymmetry between FROM and non-FROM resolution reflects the different roles these contexts play: FROM clauses primarily introduce data from the database, while other clauses primarily operate on variables introduced by FROM and other binding-producing clauses.
+
+[[sec:qualified-name-resolution]]
+==== Qualified Name Resolution
+
+When a path expression stem:[i_1.i_2. ... .i_n] consists of multiple identifiers, resolution becomes more complex because the path may represent:
+
+* A qualified database name (possibly followed by attribute navigation)
+* A variable followed by attribute path navigation
+* Some combination thereof
+
+The resolution rules extend the simple identifier rules to handle these cases:
+
+*With `@` Prefix:* For stem:[@i_1.i_2. ... .i_n]:
+
+1. First, attempt to resolve stem:[i_1] as a variable in stem:[p]. If successful, stem:[i_2. ... .i_n] represents attribute navigation from that variable.
+2. If stem:[i_1] is not a variable, attempt to resolve stem:[i_1.i_2. ... .i_m] (for stem:[m <= n]) as a database name in stem:[p_0]. If multiple matches exist, choose the longest match (largest stem:[m]). The remaining identifiers stem:[i_{m+1}. ... .i_n] represent attribute navigation.
+3. If neither resolution succeeds, the query fails compilation.
+
+*FROM Clause Path:* For stem:[i_1.i_2. ... .i_n] in a FROM clause:
+
+1. Attempt to resolve stem:[i_1.i_2. ... .i_m] (for stem:[m <= n]) as a database name in stem:[p_0]. If multiple matches exist, choose the longest match. The remaining identifiers represent attribute navigation from that database object.
+2. If no database name matches, attempt to resolve stem:[i_1] as a variable in stem:[p], with stem:[i_2. ... .i_n] as attribute navigation.
+3. If neither resolution succeeds, the query fails compilation.
+
+*Non-FROM Clause Path:* For stem:[i_1.i_2. ... .i_n] in a non-FROM clause:
+
+1. First, attempt to resolve stem:[i_1] as a variable in stem:[p]. If successful, stem:[i_2. ... .i_n] represents attribute navigation.
+2. If stem:[i_1] is not a variable, attempt to resolve stem:[i_1.i_2. ... .i_m] (for stem:[m <= n]) as a database name in stem:[p_0]. If multiple matches exist, choose the longest match.
+3. If neither resolution succeeds, the query fails compilation.
+
+[[sec:immediately-nested]]
+==== Immediately Nested Expressions
+
+The FROM vs non-FROM clause distinction applies only to expressions that are _immediately nested_ in a FROM clause. An expression is immediately nested in a FROM clause if it appears directly in the FROM clause of a query, not within a subexpression of that FROM clause.
+
+For example, in:
+
+[source, partiql]
+----
+SELECT ... FROM dataset AS x WHERE x.field IN (SELECT y.attr FROM source AS y)
+----
+
+The expressions `dataset` and `source` are immediately nested in their respective FROM clauses. However, `y.attr` is not immediately nested in the outer FROM clause; it is nested within the WHERE clause's subquery. Therefore, `y.attr` follows non-FROM resolution rules despite appearing textually within the FROM clause region.
+
+This distinction ensures that expressions are resolved according to their semantic context rather than their syntactic position.
+
+[[sec:resolution-algorithm]]
+=== Resolution Algorithm Summary
+
+The following algorithm summarizes the name resolution process for an expression stem:[i_1.i_2. ... .i_n]:
+
+1. **Determine context**: Is the expression prefixed with `@`? Is it immediately nested in a FROM clause?
+
+2. **Select resolution strategy**:
+   * If prefixed with `@`: Variables-first (stem:[i_1] as variable, then longest database name match)
+   * If in FROM clause: Database-first (longest database name match, then stem:[i_1] as variable)
+   * Otherwise: Variables-first (stem:[i_1] as variable, then longest database name match)
+
+3. **Attempt primary resolution** according to the selected strategy
+
+4. **Attempt fallback resolution** if primary resolution fails
+
+5. **Fail compilation** if both resolution attempts fail
+
+6. **Apply path navigation**: Any remaining identifiers after a successful name resolution represent attribute path navigation from the resolved value.
+
+[[sec:compilation-failures]]
+=== Compilation Failures
+
+Name resolution fails at compilation time when:
+
+* An identifier cannot be resolved in either the database environment or the variables environment
+* A qualified name cannot be matched to any database name, and its first component is not a variable
+* A required variable binding is missing in the current scope
+
+Compilation failure provides early detection of name resolution errors, preventing runtime ambiguities and ensuring that all name references have well-defined semantics before query execution begins.
+
+For detailed examples illustrating these name resolution rules in practice, see <<sec:appendix>>.

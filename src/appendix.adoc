@@ -206,3 +206,271 @@ p || b = <<c:{'id':1, 'name':'Alice'}>> || <<x:{'id':1, 'name':'Alice'}>>
 The condition `x.id = c.id` evaluates to `1 = 1`, which is `true`.
 
 This example demonstrates how inner queries have access to variables defined by outer queries through the concatenation of binding tuples.
+
+[[sec:appendix-name-resolution-examples]]
+=== Examples: Name Resolution
+
+This section provides detailed examples illustrating PartiQL's name resolution rules.
+
+[[sec:appendix-name-resolution-basic]]
+==== Example: Basic Database-to-Variable Conflicts
+
+This example demonstrates how name resolution differs between FROM clauses and other clauses, and illustrates the potential for naming conflicts when navigating nested data.
+
+Consider a database with the following named data:
+
+[source%unbreakable, partiql]
+----
+t.c: <<
+    {'a':1, 'n':[{'b':11, 'c':12}]},
+    {'a':2, 'n':[{'b':21, 'c':22}]}
+>>
+x.n: << {'b':3} >>
+y: {'a':1, 'b':2}
+----
+
+Database environment:
+
+[stem]
+++++
+p_0 = <<
+  "t.c" : <<{'a':1, 'n':[...]}, {'a':2, 'n':[...]}>>
+  "x.n" : <<{'b':3}>>,
+  "y" : {'a':1, 'b':2}
+>>
+++++
+
+Now consider the query:
+
+[source%unbreakable, partiql]
+----
+SELECT t.a
+FROM t.c AS x
+WHERE x.a IN (SELECT y.b FROM x.n AS y)
+----
+
+*Name Resolution Analysis:*
+
+1. **`t.c` in FROM clause**: Since this is in a FROM clause, resolution attempts database-first. The qualified name `t.c` matches a database name in stem:[p_0], so it resolves to the database collection.
+
+2. **`x.a` in WHERE clause**: The `x` was bound by the outer FROM clause as a variable. Since `x.a` appears in a WHERE clause (non-FROM context), resolution is variables-first. Variable `x` exists in stem:[p], so `x.a` refers to attribute `a` of variable `x`.
+
+3. **`x.n` in inner FROM clause**: This appears in an inner FROM clause, so resolution is database-first. The qualified name `x.n` exists in the database environment stem:[p_0], so it resolves to the database collection `x.n`, NOT to the `n` attribute of variable `x`.
+
+4. **`y.b` in inner SELECT clause**: Since this is in a SELECT clause (non-FROM context), resolution is variables-first. Variable `y` was bound by the inner FROM clause, so `y.b` refers to attribute `b` of variable `y`, NOT to attribute `b` of database object `y`.
+
+*Key Observations:*
+
+* In FROM clauses: Database names take priority (so `x.n` resolves to database name)
+* In non-FROM clauses: Variables take priority (so `y.b` resolves to variable `y`)
+* This asymmetry ensures both database access and nested data navigation work intuitively
+
+[[sec:appendix-name-resolution-at-prefix]]
+==== Example: Using the `@` Prefix
+
+This example demonstrates the `@` prefix for explicit variable references and illustrates the concept of immediately nested expressions.
+
+Database environment:
+
+[stem]
+++++
+p_0 = <<
+  "coll" : <<{'id':1}, {'id':2}>>,
+  "v.foo" : <<{'x':10}>>,
+  "w" : <<{'data':100}>>
+>>
+++++
+
+Query:
+
+[source%unbreakable, partiql]
+----
+SELECT v.foo
+FROM coll AS v, @v.foo AS w, 
+     (SELECT w.a, u.b FROM @w.bar AS u)
+         AS x
+----
+
+*Name Resolution Analysis:*
+
+1. **`v.foo` in SELECT clause (line 1)**:
+   - Non-FROM context, so variables-first
+   - Variable `v` exists (bound by FROM clause)
+   - Resolves to attribute `foo` of variable `v`
+
+2. **`coll` in FROM clause (line 2)**:
+   - Immediately nested in FROM clause, so database-first
+   - Database name `coll` exists in stem:[p_0]
+   - Resolves to database collection `coll`
+
+3. **`@v.foo` in FROM clause (line 2)**:
+   - The `@` prefix forces variables-first resolution
+   - Variable `v` exists in stem:[p]
+   - Resolves to attribute `foo` of variable `v`
+   - Without the `@`, this would resolve to database name `v.foo` (due to FROM clause database-first rule)
+
+4. **`@w.bar` in inner FROM clause (line 3)**:
+   - The `@` prefix forces variables-first resolution
+   - Variable `w` exists (bound in line 2)
+   - Resolves to attribute `bar` of variable `w`
+   - This is immediately nested in the inner FROM clause
+
+5. **`w.a` in inner SELECT clause (line 3)**:
+   - Non-FROM context, so variables-first
+   - Variable `w` exists in the environment
+   - Resolves to attribute `a` of variable `w`
+   - Note: `w.a` is NOT immediately nested in the outer FROM clause. It appears within a subquery in the FROM clause, but it's immediately nested in the subquery's SELECT clause.
+
+6. **`u.b` in inner SELECT clause (line 3)**:
+   - Non-FROM context, so variables-first
+   - Variable `u` exists (bound by inner FROM)
+   - Resolves to attribute `b` of variable `u`
+   - Also not immediately nested in the outer FROM
+
+*Key Observations:*
+
+* `@` prefix overrides the default resolution strategy to always try variables first
+* Immediately nested means "directly in the FROM clause of the immediately enclosing SFW query"
+* Expressions in subqueries follow their own clause context rules, not the outer FROM context
+
+[[sec:appendix-name-resolution-shadowing]]
+==== Example: Variable-to-Variable Shadowing
+
+This example illustrates how inner query variables shadow outer query variables through binding tuple concatenation.
+
+Database environment:
+
+[stem]
+++++
+p_0 = <<"products" : <<{'id':1, 'name':'Widget'}, {'id':2, 'name':'Gadget'}>>
+++++
+
+Query:
+
+[source%unbreakable, partiql]
+----
+SELECT p.name,
+       (SELECT p.id FROM products AS p WHERE p.id = 1) AS innerResult
+FROM products AS p
+WHERE p.id > 0
+----
+
+*Evaluation with Variable Shadowing:*
+
+*Outer FROM clause:* Creates binding tuples:
+
+[stem]
+++++
+<<p : {'id':1, 'name':'Widget'}>>,
+<<p : {'id':2, 'name':'Gadget'}>>
+++++
+
+*For first outer binding:*
+
+Variables environment for outer query expressions:
+
+[stem]
+++++
+p_{"outer"} = <<p : {'id':1, 'name':'Widget'}>>
+++++
+
+*Inner subquery in SELECT clause:*
+
+The subquery `(SELECT p.id FROM products AS p WHERE p.id = 1)` is evaluated with the outer variables environment stem:[p_{"outer"}].
+
+The inner FROM clause produces:
+
+[stem]
+++++
+<<p : {'id':1, 'name':'Widget'}>>,
+<<p : {'id':2, 'name':'Gadget'}>>
+++++
+
+For each inner binding tuple stem:[b_{"inner"}], expressions are evaluated in:
+
+[stem]
+++++
+p_{"outer"} || b_{"inner"}
+++++
+
+For the first inner binding:
+
+[stem]
+++++
+<<p:{'id':1, 'name':'Widget'}>> || <<p:{'id':1, 'name':'Widget'}>>
+= <<p:{'id':1, 'name':'Widget'}>>
+++++
+
+The right-precedence rule means the inner `p` shadows the outer `p`. When evaluating `p.id` in the inner SELECT or WHERE, it refers to the inner binding, not the outer binding.
+
+*Resolution:*
+
+* In the outer SELECT `p.name`: References the outer variable `p`
+* In the inner FROM `products`: Database-first resolution finds database name
+* In the inner WHERE `p.id = 1`: References the inner variable `p` (which shadows outer `p`)
+* In the inner SELECT `p.id`: References the inner variable `p`
+
+This shadowing behavior matches standard lexical scoping in programming languages.
+
+[[sec:appendix-name-resolution-longest-match]]
+==== Example: Longest Database Name Match
+
+This example demonstrates how qualified name resolution chooses the longest matching database name.
+
+Database environment:
+
+[stem]
+++++
+p_0 = <<
+  "db" : {'schema': {...}},
+  "db.schema" : {'table': [...]},
+  "db.schema.table" : <<{'col':1}, {'col':2}>>
+>>
+++++
+
+Variables environment:
+
+[stem]
+++++
+p = <<>>
+++++
+
+Query:
+
+[source%unbreakable, partiql]
+----
+SELECT x.col
+FROM db.schema.table AS x
+----
+
+*Name Resolution for `db.schema.table`:*
+
+Since this is in a FROM clause, resolution is database-first with longest match:
+
+* Try `db.schema.table` as a database name: **Match found** (length 3)
+* Try `db.schema` as a database name: Match found (length 2)  
+* Try `db` as a database name: Match found (length 1)
+
+The algorithm selects the longest match: `db.schema.table` (length 3).
+
+Result: The FROM clause binds `x` to each element of the collection at database name `db.schema.table`.
+
+Now consider this query:
+
+[source%unbreakable, partiql]
+----
+SELECT db.schema.table.col
+FROM someSource AS x
+----
+
+*Name Resolution for `db.schema.table.col`:*
+
+Since this is in a SELECT clause (non-FROM), resolution is variables-first:
+
+* Try `db` as a variable: Not found
+* Try longest database name match starting with `db`:
+  - Try `db.schema.table` as database name: Match found (length 3)
+
+The path resolves as: database name `db.schema.table`, then attribute navigation `.col`.
+
+Result: `db.schema.table.col` refers to attribute `col` of each element in the database collection `db.schema.table`.
