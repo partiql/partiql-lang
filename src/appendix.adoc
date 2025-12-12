@@ -475,3 +475,852 @@ Since this is in a SELECT clause (non-FROM), resolution is variables-first:
 The path resolves as: database name `db.schema.table`, then attribute navigation `.col`.
 
 Result: `db.schema.table.col` refers to attribute `col` of each element in the database collection `db.schema.table`.
+
+[[sec:appendix-query-syntax-examples]]
+=== Examples: Query Syntax and Clause Semantics
+
+This section provides comprehensive examples demonstrating PartiQL query syntax, binding tuple flow, and clause semantics.
+
+[[sec:appendix-from-clause-examples]]
+==== Examples: FROM Clause
+
+===== Basic FROM with Arrays
+
+Consider a database with an array of sensor readings:
+
+[source%unbreakable, partiql]
+----
+sensors: [
+    {'id': 1, 'temp': 72.5},
+    {'id': 2, 'temp': 68.3},
+    {'id': 3, 'temp': 71.0}
+]
+----
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT VALUE s.temp
+FROM sensors AS s
+----
+
+*Binding Tuples Flow:*
+
+The FROM clause produces binding tuples:
+[source%unbreakable]
+----
+B_FROM^out = <<
+    <<s: {'id': 1, 'temp': 72.5}>>,
+    <<s: {'id': 2, 'temp': 68.3}>>,
+    <<s: {'id': 3, 'temp': 71.0}>>
+>>
+----
+
+The SELECT VALUE clause evaluates `s.temp` for each binding tuple, producing:
+[source%unbreakable]
+----
+<<72.5, 68.3, 71.0>>
+----
+
+===== FROM with AT for Position
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {'position': p, 'id': s.id}
+FROM sensors AS s AT p
+----
+
+*Binding Tuples Flow:*
+
+The FROM clause with AT produces:
+[source%unbreakable]
+----
+B_FROM^out = <<
+    <<s: {'id': 1, 'temp': 72.5}, p: 0>>,
+    <<s: {'id': 2, 'temp': 68.3}, p: 1>>,
+    <<s: {'id': 3, 'temp': 71.0}, p: 2>>
+>>
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    {'position': 0, 'id': 1},
+    {'position': 1, 'id': 2},
+    {'position': 2, 'id': 3}
+>>
+----
+
+===== UNPIVOT Example
+
+Consider a tuple representing stock prices:
+
+[source%unbreakable, partiql]
+----
+stocks: {'AMZN': 840.05, 'GOOG': 1250.30, 'MSFT': 310.20}
+----
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {'symbol': sym, 'price': val}
+FROM UNPIVOT stocks AS val AT sym
+----
+
+*Binding Tuples Flow:*
+
+UNPIVOT produces one binding tuple per attribute:
+[source%unbreakable]
+----
+B_FROM^out = <<
+    <<val: 840.05, sym: 'AMZN'>>,
+    <<val: 1250.30, sym: 'GOOG'>>,
+    <<val: 310.20, sym: 'MSFT'>>
+>>
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    {'symbol': 'AMZN', 'price': 840.05},
+    {'symbol': 'GOOG', 'price': 1250.30},
+    {'symbol': 'MSFT', 'price': 310.20}
+>>
+----
+
+[[sec:appendix-join-examples]]
+==== Examples: JOINs
+
+===== CROSS JOIN with Correlation
+
+Consider nested data where each sensor has an array of readings:
+
+[source%unbreakable, partiql]
+----
+sensors: [
+    {'id': 1, 'readings': [{'time': '10:00', 'val': 72.5}]},
+    {'id': 2, 'readings': [{'time': '10:00', 'val': 68.3}, 
+                           {'time': '10:30', 'val': 69.1}]}
+]
+----
+
+Query that unnests readings:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {'sensor': s.id, 'time': r.time, 'value': r.val}
+FROM sensors AS s, s.readings AS r
+----
+
+*Binding Tuples Flow:*
+
+For the first sensor (s.id = 1):
+[source%unbreakable]
+----
+b_left = <<s: {'id': 1, 'readings': [...]}>
+----
+
+The right side `s.readings` is evaluated with b_left in scope, producing:
+[source%unbreakable]
+----
+B_right = <<
+    <<r: {'time': '10:00', 'val': 72.5}>>
+>>
+----
+
+Combined:
+[source%unbreakable]
+----
+<<s: {'id': 1, 'readings': [...]}, r: {'time': '10:00', 'val': 72.5}>>
+----
+
+For the second sensor (s.id = 2):
+[source%unbreakable]
+----
+b_left = <<s: {'id': 2, 'readings': [...]}>
+----
+
+The right side produces two binding tuples:
+[source%unbreakable]
+----
+B_right = <<
+    <<r: {'time': '10:00', 'val': 68.3}>>,
+    <<r: {'time': '10:30', 'val': 69.1}>>
+>>
+----
+
+Final result:
+[source%unbreakable, partiql]
+----
+<<
+    {'sensor': 1, 'time': '10:00', 'value': 72.5},
+    {'sensor': 2, 'time': '10:00', 'value': 68.3},
+    {'sensor': 2, 'time': '10:30', 'value': 69.1}
+>>
+----
+
+===== LEFT JOIN Example
+
+Consider customers and their orders:
+
+[source%unbreakable, partiql]
+----
+customers: [
+    {'id': 1, 'name': 'Alice'},
+    {'id': 2, 'name': 'Bob'}
+]
+
+orders: [
+    {'custId': 1, 'item': 'Widget', 'qty': 5}
+]
+----
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {'customer': c.name, 'order': o.item}
+FROM customers AS c LEFT JOIN orders AS o ON c.id = o.custId
+----
+
+*Binding Tuples Flow:*
+
+For customer Alice (id=1), matching order exists:
+[source%unbreakable]
+----
+<<c: {'id': 1, 'name': 'Alice'}, o: {'custId': 1, 'item': 'Widget', 'qty': 5}>>
+----
+
+For customer Bob (id=2), no matching order:
+[source%unbreakable]
+----
+<<c: {'id': 2, 'name': 'Bob'}, o: NULL>>
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    {'customer': 'Alice', 'order': 'Widget'},
+    {'customer': 'Bob', 'order': NULL}
+>>
+----
+
+[[sec:appendix-where-examples]]
+==== Examples: WHERE Clause
+
+===== Basic Filtering
+
+Using the sensors data:
+
+[source%unbreakable, partiql]
+----
+SELECT VALUE s
+FROM sensors AS s
+WHERE s.temp > 70
+----
+
+*Binding Tuples Flow:*
+
+Input from FROM:
+[source%unbreakable]
+----
+B_WHERE^in = <<
+    <<s: {'id': 1, 'temp': 72.5}>>,
+    <<s: {'id': 2, 'temp': 68.3}>>,
+    <<s: {'id': 3, 'temp': 71.0}>>
+>>
+----
+
+Condition evaluation:
+- For s.id=1: `72.5 > 70` → true ✓
+- For s.id=2: `68.3 > 70` → false ✗
+- For s.id=3: `71.0 > 70` → true ✓
+
+Output:
+[source%unbreakable]
+----
+B_WHERE^out = <<
+    <<s: {'id': 1, 'temp': 72.5}>>,
+    <<s: {'id': 3, 'temp': 71.0}>>
+>>
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    {'id': 1, 'temp': 72.5},
+    {'id': 3, 'temp': 71.0}
+>>
+----
+
+===== NULL and MISSING in WHERE
+
+Consider data with absent values:
+
+[source%unbreakable, partiql]
+----
+readings: [
+    {'sensor': 1, 'status': 'active'},
+    {'sensor': 2, 'status': NULL},
+    {'sensor': 3}
+]
+----
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT VALUE r.sensor
+FROM readings AS r
+WHERE r.status = 'active'
+----
+
+*Evaluation:*
+- Sensor 1: `'active' = 'active'` → true ✓
+- Sensor 2: `NULL = 'active'` → NULL (excluded) ✗
+- Sensor 3: `MISSING = 'active'` → MISSING (excluded) ✗
+
+Result:
+[source%unbreakable, partiql]
+----
+<<1>>
+----
+
+[[sec:appendix-group-by-examples]]
+==== Examples: GROUP BY Clause
+
+===== Core GROUP BY with Group Variable
+
+Consider sales data:
+
+[source%unbreakable, partiql]
+----
+sales: [
+    {'region': 'West', 'amount': 100, 'item': 'A'},
+    {'region': 'West', 'amount': 150, 'item': 'B'},
+    {'region': 'East', 'amount': 200, 'item': 'C'}
+]
+----
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {
+    'region': r,
+    'total': (SELECT VALUE s.amount FROM g AS s),
+    'count': COLL_COUNT(g)
+}
+FROM sales AS s
+GROUP BY s.region AS r GROUP AS g
+----
+
+*Binding Tuples Flow:*
+
+Input to GROUP BY:
+[source%unbreakable]
+----
+B_GROUP^in = <<
+    <<s: {'region': 'West', 'amount': 100, 'item': 'A'}>>,
+    <<s: {'region': 'West', 'amount': 150, 'item': 'B'}>>,
+    <<s: {'region': 'East', 'amount': 200, 'item': 'C'}>>
+>>
+----
+
+Partitioned into groups by s.region:
+
+Group for 'West':
+[source%unbreakable]
+----
+<<r: 'West', g: <<
+    <<s: {'region': 'West', 'amount': 100, 'item': 'A'}>>,
+    <<s: {'region': 'West', 'amount': 150, 'item': 'B'}>>
+>>>>
+----
+
+Group for 'East':
+[source%unbreakable]
+----
+<<r: 'East', g: <<
+    <<s: {'region': 'East', 'amount': 200, 'item': 'C'}>>
+>>>>
+----
+
+Output from GROUP BY:
+[source%unbreakable]
+----
+B_GROUP^out = <<
+    <<r: 'West', g: <<...West sales...>>>>,
+    <<r: 'East', g: <<...East sales...>>>>
+>>
+----
+
+Final result:
+[source%unbreakable, partiql]
+----
+<<
+    {'region': 'West', 'total': <<100, 150>>, 'count': 2},
+    {'region': 'East', 'total': <<200>>, 'count': 1}
+>>
+----
+
+===== GROUP ALL Example
+
+Query that counts all sensors above a threshold:
+
+[source%unbreakable, partiql]
+----
+SELECT VALUE {'highTempCount': COLL_COUNT(g)}
+FROM sensors AS s
+WHERE s.temp > 75
+GROUP ALL AS g
+----
+
+If no sensors have temp > 75:
+
+*Binding Tuples Flow:*
+[source%unbreakable]
+----
+B_WHERE^out = <<>>  (empty bag)
+B_GROUP^out = <<g: <<>>>>  (one binding with empty group)
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<{'highTempCount': 0}>>
+----
+
+This demonstrates GROUP ALL always produces output, even with empty input.
+
+===== SQL Aggregate Functions (Implicit Group Variable)
+
+Query using SQL-style aggregates:
+[source%unbreakable, partiql]
+----
+SELECT s.region AS region,
+       SUM(s.amount) AS total,
+       COUNT(*) AS count
+FROM sales AS s
+GROUP BY s.region
+----
+
+This is rewritten to:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {
+    'region': s.region,
+    'total': SUM(SELECT VALUE p.s.amount FROM g AS p),
+    'count': COUNT(g)
+}
+FROM sales AS s
+GROUP BY s.region AS region GROUP AS g
+----
+
+[[sec:appendix-select-value-examples]]
+==== Examples: SELECT VALUE Clause
+
+===== Heterogeneous Collections
+
+SELECT VALUE can produce collections of mixed types:
+
+[source%unbreakable, partiql]
+----
+SELECT VALUE CASE
+    WHEN s.temp > 70 THEN s.temp
+    WHEN s.temp IS NULL THEN 'No reading'
+    ELSE s.id
+END
+FROM sensors AS s
+----
+
+Result might be:
+[source%unbreakable, partiql]
+----
+<<72.5, 'No reading', 3>>
+----
+
+This collection contains numbers, strings, mixing types freely.
+
+===== Nested Collections
+
+Creating nested structure:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {
+    'sensor': s.id,
+    'dailyReadings': [s.morning, s.afternoon, s.evening]
+}
+FROM sensors AS s
+----
+
+===== MISSING Treatment in Constructors
+
+Consider data with missing attributes:
+
+[source%unbreakable, partiql]
+----
+data: [
+    {'a': 1, 'b': 2},
+    {'a': 3}
+]
+----
+
+Tuple constructor:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {'x': d.a, 'y': d.b}
+FROM data AS d
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    {'x': 1, 'y': 2},
+    {'x': 3}
+>>
+----
+
+The 'y' attribute is omitted when d.b is MISSING.
+
+Array constructor:
+[source%unbreakable, partiql]
+----
+SELECT VALUE [d.a, d.b]
+FROM data AS d
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    [1, 2],
+    [3, MISSING]
+>>
+----
+
+MISSING is included in arrays.
+
+[[sec:appendix-select-examples]]
+==== Examples: SELECT Clause
+
+===== Basic SQL SELECT
+
+Traditional SQL-style query:
+[source%unbreakable, partiql]
+----
+SELECT s.id AS sensorId, s.temp AS temperature
+FROM sensors AS s
+WHERE s.temp > 70
+----
+
+This is equivalent to:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {'sensorId': s.id, 'temperature': s.temp}
+FROM sensors AS s
+WHERE s.temp > 70
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    {'sensorId': 1, 'temperature': 72.5},
+    {'sensorId': 3, 'temperature': 71.0}
+>>
+----
+
+===== SELECT * Example
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT s.*
+FROM sensors AS s
+----
+
+When s binds to `{'id': 1, 'temp': 72.5}`, the output includes all attributes:
+[source%unbreakable, partiql]
+----
+<<
+    {'id': 1, 'temp': 72.5},
+    {'id': 2, 'temp': 68.3},
+    {'id': 3, 'temp': 71.0}
+>>
+----
+
+===== Combining * with Expressions
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT s.*, s.temp * 1.8 + 32 AS tempF
+FROM sensors AS s
+----
+
+Result adds computed column:
+[source%unbreakable, partiql]
+----
+<<
+    {'id': 1, 'temp': 72.5, 'tempF': 162.5},
+    {'id': 2, 'temp': 68.3, 'tempF': 154.94},
+    {'id': 3, 'temp': 71.0, 'tempF': 159.8}
+>>
+----
+
+[[sec:appendix-pivot-examples]]
+==== Examples: PIVOT Clause
+
+===== Basic PIVOT
+
+Converting a collection into a single tuple:
+
+[source%unbreakable, partiql]
+----
+prices: [
+    {'ticker': 'AMZN', 'price': 840.05},
+    {'ticker': 'GOOG', 'price': 1250.30}
+]
+----
+
+Query:
+[source%unbreakable, partiql]
+----
+PIVOT p.price AT p.ticker
+FROM prices AS p
+----
+
+*Binding Tuples Flow:*
+
+Input:
+[source%unbreakable]
+----
+B_PIVOT^in = <<
+    <<p: {'ticker': 'AMZN', 'price': 840.05}>>,
+    <<p: {'ticker': 'GOOG', 'price': 1250.30}>>
+>>
+----
+
+For each binding tuple, evaluate name (p.ticker) and value (p.price):
+- First: name='AMZN', value=840.05
+- Second: name='GOOG', value=1250.30
+
+Output (single tuple):
+[source%unbreakable, partiql]
+----
+{'AMZN': 840.05, 'GOOG': 1250.30}
+----
+
+===== PIVOT with Filtering
+
+Creating a selective tuple:
+[source%unbreakable, partiql]
+----
+PIVOT p.price AT p.ticker
+FROM prices AS p
+WHERE p.price > 1000
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+{'GOOG': 1250.30}
+----
+
+Only tuples passing WHERE are included in PIVOT.
+
+[[sec:appendix-order-by-examples]]
+==== Examples: ORDER BY Clause
+
+===== Basic Ordering
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT VALUE s
+FROM sensors AS s
+ORDER BY s.temp DESC
+----
+
+*Binding Tuples Flow:*
+
+Before ORDER BY (bag):
+[source%unbreakable]
+----
+<<
+    <<s: {'id': 1, 'temp': 72.5}>>,
+    <<s: {'id': 2, 'temp': 68.3}>>,
+    <<s: {'id': 3, 'temp': 71.0}>>
+>>
+----
+
+After ORDER BY (array):
+[source%unbreakable, partiql]
+----
+[
+    {'id': 1, 'temp': 72.5},
+    {'id': 3, 'temp': 71.0},
+    {'id': 2, 'temp': 68.3}
+]
+----
+
+Note the result is now an array (indicated by square brackets).
+
+===== Heterogeneous Type Ordering
+
+Query with mixed types:
+[source%unbreakable, partiql]
+----
+mixed: [5, 'hello', true, NULL, 2.5, false, 'world']
+----
+
+[source%unbreakable, partiql]
+----
+SELECT VALUE m
+FROM mixed AS m
+ORDER BY m
+----
+
+Result (using order-by less-than):
+[source%unbreakable, partiql]
+----
+[NULL, false, true, 2.5, 5, 'hello', 'world']
+----
+
+Order: NULL/MISSING < booleans < numbers < strings
+
+===== NULLS FIRST vs NULLS LAST
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT VALUE s.status
+FROM sensors AS s
+ORDER BY s.status NULLS LAST
+----
+
+With data `['active', NULL, 'inactive', MISSING]`:
+
+Result:
+[source%unbreakable, partiql]
+----
+['active', 'inactive', NULL, MISSING]
+----
+
+[[sec:appendix-complex-query-examples]]
+==== Examples: Complex Queries
+
+===== Nesting with GROUP BY
+
+Create nested structure with grouped data:
+
+[source%unbreakable, partiql]
+----
+SELECT VALUE {
+    'region': r,
+    'items': (SELECT VALUE {'item': i.item, 'amount': i.amount}
+              FROM g AS i)
+}
+FROM sales AS s
+GROUP BY s.region AS r GROUP AS g
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    {
+        'region': 'West',
+        'items': <<
+            {'item': 'A', 'amount': 100},
+            {'item': 'B', 'amount': 150}
+        >>
+    },
+    {
+        'region': 'East',
+        'items': <<
+            {'item': 'C', 'amount': 200}
+        >>
+    }
+>>
+----
+
+===== UNPIVOT and PIVOT Round-Trip
+
+Transforming tuple structure:
+
+[source%unbreakable, partiql]
+----
+config: {'timeout': 30, 'retries': 3, 'debug': false}
+----
+
+Filter and reconstruct:
+[source%unbreakable, partiql]
+----
+PIVOT v AT k
+FROM UNPIVOT config AS v AT k
+WHERE v IS NOT NULL
+----
+
+This pattern enables attribute-level filtering on tuples.
+
+===== Multi-Level Unnesting
+
+Deeply nested data:
+[source%unbreakable, partiql]
+----
+departments: [
+    {
+        'name': 'Engineering',
+        'teams': [
+            {
+                'name': 'Frontend',
+                'members': [{'id': 1}, {'id': 2}]
+            },
+            {
+                'name': 'Backend',
+                'members': [{'id': 3}]
+            }
+        ]
+    }
+]
+----
+
+Flatten to individual members:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {
+    'dept': d.name,
+    'team': t.name,
+    'member': m.id
+}
+FROM departments AS d, d.teams AS t, t.members AS m
+----
+
+*Binding Tuples Flow:*
+
+The cascading joins unnest each level:
+1. FROM departments creates binding for d
+2. d.teams evaluated with d in scope, creates bindings for t
+3. t.members evaluated with both d and t in scope, creates bindings for m
+
+Final bindings contain all three variables:
+[source%unbreakable]
+----
+<<d: {...}, t: {...}, m: {'id': 1}>>
+<<d: {...}, t: {...}, m: {'id': 2}>>
+<<d: {...}, t: {...Backend...}, m: {'id': 3}>>
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    {'dept': 'Engineering', 'team': 'Frontend', 'member': 1},
+    {'dept': 'Engineering', 'team': 'Frontend', 'member': 2},
+    {'dept': 'Engineering', 'team': 'Backend', 'member': 3}
+>>
+----
