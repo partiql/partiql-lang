@@ -5,22 +5,22 @@ PartiQL supports temporal data types for representing dates, times, and timestam
 
 [cols="1,1,3", options="header"]
 |===
-|Type |Bit Size |Description
+|Type |Size |Description
 
 |`DATE`
-|32-64 bits (implementation-defined)
+|Implementation-defined
 |Calendar date (year, month, day)
 
 |`TIME` / `TIME(p)`
-|32-64 bits (implementation-defined)
+|Implementation-defined
 |Time of day with optional precision p (fractional seconds)
 
 |`TIMESTAMP` / `TIMESTAMP(p)`
-|64-128 bits (implementation-defined)
+|Implementation-defined
 |Date and time with optional precision p and optional timezone
 
 |`TIMESTAMP WITH TIME ZONE`
-|64-128 bits (implementation-defined)
+|Implementation-defined
 |Timestamp with explicit timezone information
 |===
 
