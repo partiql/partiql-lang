@@ -45,7 +45,7 @@ identifier = letter, { letter | digit | "_" | "$" }
 [[sec:ordered-vs-unordered-tuples]]
 ==== Ordered vs. Unordered Tuples
 
-PartiQL distinguishes between ordered and unordered tuples, though the distinction is typically determined by schema rather than syntax.
+PartiQL distinguishes between ordered and unordered tuples, though the distinction is typically determined by type definitions rather than syntax.
 
 *Unordered Tuples:*
 - Default behavior in dynamically typed contexts
@@ -54,7 +54,7 @@ PartiQL distinguishes between ordered and unordered tuples, though the distincti
 - Attribute access by name only
 
 *Ordered Tuples:*
-- Specified by schema
+- Specified by type definitions
 - Attribute order is significant and preserved
 - Positional access may be available (implementation-defined)
 - SQL tables with defined column order produce ordered tuples
@@ -115,7 +115,7 @@ PartiQL allows duplicate attribute names within tuples for compatibility with no
 - Deep equality compares all attributes, including duplicates
 - `UNPIVOT` can access all occurrences
 
-*Ordered Tuples:* First occurrence is well-defined based on schema-defined order.
+*Ordered Tuples:* First occurrence is well-defined based on order defined by type definitions.
 
 *Unordered Tuples:* First occurrence is implementation-defined in permissive mode, error in type-checking mode.
 

@@ -70,7 +70,7 @@ A type environment is represented as a binding tuple of the form:
 
 where each stem:[x_i] is a unique name that binds to a PartiQL _type_ stem:[tau_i].
 
-For dynamically typed databases or values without explicit schemas, stem:[tau] can be considered the union of all possible types, indicating that any operation is _potentially_ applicable to such values. Type checking and schema considerations are discussed in detail in their respective sections.
+For dynamically typed databases or values without explicit type definitions, stem:[tau] can be considered the union of all possible types, indicating that any operation is _potentially_ applicable to such values. Type checking and type considerations are discussed in detail in their respective sections.
 
 [[sec:qualified-names]]
 === Qualified Names
