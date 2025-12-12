@@ -19,4 +19,4 @@ include::types_collection.adoc[]
 
 include::types_absent.adoc[]
 
-include::types_ion.adoc[]
+include::types_external.adoc[]

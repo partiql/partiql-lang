@@ -1,5 +1,5 @@
-[[sec:type-system-ion-integration]]
-=== Type System and Ion Integration
+[[sec:external-type-systems]]
+=== External Type Systems
 
 PartiQL's type system is designed to be compatible with Amazon Ion's type system, enabling seamless integration with Ion data.
 
