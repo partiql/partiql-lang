@@ -1,7 +1,7 @@
 [[sec:string-type]]
 === String Type
 
-PartiQL supports text data using Unicode character strings. String types are variable-length and can represent text in any Unicode encoding.
+PartiQL supports arbitrary-length text data with the string data type.
 
 [cols="1,1,3", options="header"]
 |===
@@ -11,26 +11,19 @@ PartiQL supports text data using Unicode character strings. String types are var
 |Variable-length character string up to implementation maximum
 |===
 
-*Character Encoding:*
-
-* Strings are Unicode character sequences
-* Internal representation is implementation-defined (UTF-8, UTF-16, etc.)
-* Each character is a Unicode code point (21 bits effective range: U+0000 to U+10FFFF)
-
 *EBNF Syntax for String Literals:*
 [source, ebnf]
 ----
-string_literal = "'", { string_character | escaped_character }, "'" ;
+character_string_literal =
+    quote { character_representation } <quote>
+    [ { separator quote { character_representation } quote } ]
 
-string_character = ? any Unicode character except quotes and backslash ? ;
+character_representation =
+    non_quote_character
+    | quote_symbol
 
-escaped_character = "\", ( "'" | '"' | "\" | "/" | "n" | "r" | "t" 
-                  | "b" | "f" 
-                  | "u", hex_digit, hex_digit, hex_digit, hex_digit
-                  | "U", hex_digit, { hex_digit } ) ;
-
-hex_digit = digit | "a" | "b" | "c" | "d" | "e" | "f"
-          | "A" | "B" | "C" | "D" | "E" | "F" ;
+quote_symbol = quote quote
 ----
 
-TODO: Check this.
+// TODO: We will probably want to eventually support C-style escape sequences. Consider adopting PostgreSQL style c string escapes: https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-ESCAPE
+// TODO: We want to eventually codify SQL spec's unicode strings, bit strings, etc.
