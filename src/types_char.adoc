@@ -1,24 +1,11 @@
-[[sec:string-types]]
-=== String Types
+[[sec:string-type]]
+=== String Type
 
 PartiQL supports text data using Unicode character strings. String types are variable-length and can represent text in any Unicode encoding.
 
 [cols="1,1,3", options="header"]
 |===
 |Type |Size |Description
-
-|`CHARACTER(n)` / `CHAR(n)`
-|Variable
-|Fixed-length character string of exactly n characters
-
-|`CHARACTER VARYING(n)` / `VARCHAR(n)`
-|Variable
-|Variable-length character string with maximum length n
-
-|`CLOB(p)` / `CLOB`
-|Variable
-|Character Large Object - large text data
-
 |`STRING`
 |Variable (up to implementation maximum)
 |Variable-length character string up to implementation maximum
@@ -35,11 +22,7 @@ PartiQL supports text data using Unicode character strings. String types are var
 ----
 string_literal = "'", { string_character | escaped_character }, "'" ;
 
-clob_literal = "{{", '"', { clob_character | escaped_character }, '"', "}}" ;
-
 string_character = ? any Unicode character except quotes and backslash ? ;
-
-clob_character = ? any Unicode character except quotes and backslash ? ;
 
 escaped_character = "\", ( "'" | '"' | "\" | "/" | "n" | "r" | "t" 
                   | "b" | "f" 
@@ -51,11 +34,3 @@ hex_digit = digit | "a" | "b" | "c" | "d" | "e" | "f"
 ----
 
 TODO: Check this.
-
-*Examples:*
-[source, partiql]
-----
-'Hello, World!'
-'Unicode: \u03B1\u03B2\u03B3'  -- Greek letters αβγ
-'Escaped quote: \' and backslash: \\'
-----

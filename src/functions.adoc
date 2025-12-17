@@ -185,3 +185,8 @@ TODO: Document multi-step path expressions with wildcards (combinations of `[*]`
 === Operator Precedence
 
 TODO
+
+[[sec:dynamic-dispatch]]
+=== Dynamic Dispatch
+
+TODO
