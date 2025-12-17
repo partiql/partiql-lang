@@ -1,7 +1,7 @@
 [[sec:tuple-type]]
 === Tuple Type
 
-Tuples are unordered or ordered collections of attribute-value pairs, where each attribute has a name (string) and an associated value of any PartiQL type.
+Tuples are collections of attribute-value pairs, where each attribute has a name (string) and an associated value of any PartiQL type. Tuples may contain duplicate attribute names, though this is not encouraged.
 
 [cols="1,1,3", options="header"]
 |===
@@ -12,67 +12,19 @@ Tuples are unordered or ordered collections of attribute-value pairs, where each
 |Collection of named attribute-value pairs
 |===
 
-*EBNF Syntax for Tuple Constructors:*
+*Tuple Construction*
 [source, ebnf]
 ----
-tuple_value = "{" [ attribute_pair { "," attribute_pair } ] "}" ;
+tuple_constructor = "{" [ attribute_pair { "," attribute_pair } ] "}" ;
 
 attribute_pair = expression ":" expression ;
 ----
 
+When constructing tuples, if an attribute value evaluates to `MISSING`, the attribute is omitted entirely from the tuple rather than being included with a MISSING value.
+
 [[sec:ordered-vs-unordered-tuples]]
 ==== Ordered vs. Unordered Tuples
 
-PartiQL distinguishes between ordered and unordered tuples, though the distinction is typically determined by type definitions rather than syntax.
+In the presence of type information, a tuple may be ordered. The semantics of ordered tuples and unordered tuples are equal, unless otherwise indicated. This allows for SQL-style access of a table's rows. as it pertains to positional access for the `GROUP BY` clause, discussed in <<sec:group-by-clause>>.
 
-*Unordered Tuples:*
-
-* Default behavior in dynamically typed contexts
-* Attribute order is not significant
-* `{'a': 1, 'b': 2}` equals `{'b': 2, 'a': 1}`
-* Attribute access by name only
-
-*Ordered Tuples:*
-
-* Specified by type definitions
-* Attribute order is significant and preserved
-* Positional access may be available (implementation-defined)
-* SQL tables with defined column order produce ordered tuples
-* Attribute order affects iteration and certain operations
-
-*Schema Declaration:*
-[source, sql]
-----
--- Ordered tuple (via SQL table definition)
-CREATE TABLE users (
-    id INT,
-    name VARCHAR(100),
-    email VARCHAR(255)
-)
-
--- Results in ordered tuples: {'id': _, 'name': _, 'email': _}
-----
-
-[[sec:attribute-names-and-values]]
-==== Attribute Names and Values
-
-*Attribute Names:*
-
-* Must be strings (any Unicode string)
-* Can be identifiers or quoted strings
-* Can be computed dynamically using expressions
-* Case-sensitive by default (implementation may vary)
-
-*Attribute Values:*
-
-* Can be any PartiQL type (scalars, collections, tuples)
-* Can be NULL (but not MISSING - see special handling below)
-* Fully heterogeneous: different tuples can have different value types for same attribute name
-
-*MISSING Attributes:*
-When constructing tuples, if an attribute value evaluates to `MISSING`, the attribute is omitted entirely from the tuple rather than being included with a MISSING value.
-
-[[sec:duplicate-attribute-names]]
-==== Duplicate Attribute Names
-
-PartiQL allows duplicate attribute names within tuples, though this is not encouraged.
+Ordered tuples allow for the PartiQL compiler to validate type semantics of a PartiQL statement prior to execution. The extent of type validation is implementation specific. This is discussed in later chapters.

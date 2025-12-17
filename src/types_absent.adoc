@@ -1,114 +1,32 @@
-[[sec:absent-values]]
-=== Absent Values (NULL and MISSING)
+[[sec:missing-value]]
+=== Missing Value
 
-PartiQL has two kinds of absent values to distinguish between null-valued data and missing data, enabling better handling of semi-structured data.
+PartiQL has two kinds of absent values: `NULL` and `MISSING`. This distinction is fundamental to PartiQL's ability to handle semi-structured, schema-flexible data where attributes may or may not exist across different tuples.
+
+Unlike SQL, where a query that refers to a non-existent attribute name is expected to fail during compilation, PartiQL is designed to operate on dynamically typed, semi-structured data where tuples may have different sets of attributes. The query processor must handle cases where navigation paths fail to bind to any information at runtime. The `MISSING` value serves as the result in such cases, enabling PartiQL to distinguish between the absence of an attribute itself and an attribute that exists but has no value.
 
 [cols="1,1,3", options="header"]
 |===
-|Type |Bit Size |Description
-
-|`NULL`
-|Implementation-defined (typically 1 bit + tag)
-|Explicit null value (SQL null)
-
+|Type |Size |Description
 |`MISSING`
-|Implementation-defined (typically 1 bit + tag)
-|Absent/undefined value (not present in data)
+|Implementation-defined
+|Absent/undefined value (attribute not present in data)
 |===
 
 *EBNF Syntax:*
 [source, ebnf]
 ----
-absent_value = "NULL" | "null" | "MISSING" ;
-----
-
-==== NULL
-
-`NULL` represents an explicit null value, compatible with SQL's NULL semantics.
-
-*Characteristics:*
-
-* Explicit presence of unknown/inapplicable value
-* Can be stored as attribute value in tuples
-* Participates in SQL three-valued logic
-* `NULL = NULL` is not TRUE (returns NULL in SQL semantics)
-
-*Examples:*
-[source, partiql]
-----
-{'a': 1, 'b': NULL}                  -- tuple with explicit NULL
-[1, NULL, 3]                         -- array with NULL element
-NULL + 5                             -- Returns: NULL
-NULL > 0                             -- Returns: NULL (or false in boolean context)
-----
-
-==== MISSING
-
-`MISSING` represents the absence of data, typical in semi-structured data where attributes may not exist.
-
-*Characteristics:*
-
-* Indicates data is not present
-* *Cannot* be stored as attribute value in tuples (omitted instead)
-* Can appear in arrays and bags
-* Path navigation to non-existent attribute returns MISSING
-* Operations on MISSING typically return MISSING
-
-*Examples:*
-[source, partiql]
-----
-{'a': 1}.b                           -- Returns: MISSING
-[1, MISSING, 3]                      -- Array with MISSING element
-{'a': 1, 'b': MISSING}               -- Becomes: {'a': 1} (b omitted)
-MISSING + 5                          -- Returns: MISSING
+missing_value = "MISSING" ;
 ----
 
 ==== NULL vs. MISSING
 
-*Key Differences:*
+*NULL*: Indicates that a value is absent when a field, attribute, or column is expected to exist, but the value itself is absent. `NULL` marks "this field exists but contains no value," consistent with SQL semantics.
 
-[cols="2,3,3", options="header"]
-|===
-|Aspect |NULL |MISSING
+*MISSING*: Represents the absence of the attribute itself—the attribute is not defined in the data structure. `MISSING` values arise when:
 
-|Origin
-|Explicit null in data
-|Absent/non-existent data
+1. Using the `MISSING` keyword explicitly
+2. Operations encounter type errors in permissive mode (see <<sec:execution-modes>>)
+3. Navigating to non-existent attributes in permissive mode (see <<section:paths>>)
 
-|In Tuples
-|Can be attribute value
-|Causes attribute to be omitted
-
-|In Arrays/Bags
-|Valid element
-|Valid element
-
-|Equality
-|NULL = NULL is NULL (SQL) / eqg(NULL, NULL) is TRUE (grouping)
-|MISSING = MISSING is MISSING / eqg(MISSING, MISSING) is TRUE (grouping)
-
-|Grouping
-|NULLs group together
-|MISSINGs group with NULLs (coerced to NULL)
-
-|Path Result
-|Explicit null value stored
-|Navigation to non-existent path
-|===
-
-*Examples:*
-[source, partiql]
-----
--- Distinction preserved
-{'a': NULL}                          -- Has 'a' attribute with NULL value
-{'b': 1}                             -- Lacks 'a' attribute (MISSING)
-
--- Both in array
-[NULL, MISSING, 1]                   -- Array with both absent types
-
--- Grouping behavior
-SELECT g 
-FROM [{'x': NULL}, {'x': MISSING}, {}] AS t
-GROUP BY t.x GROUP AS g
--- Results in one group: both NULL and MISSING group together
-----
+Additional semantics for `MISSING` are detailed in sections covering tuple construction (<<sec:tuple-constructor>>), function behavior (<<sec:functions>>), grouping (<<sec:eqg>>), and predicates (<<sec:is-missing>>).
