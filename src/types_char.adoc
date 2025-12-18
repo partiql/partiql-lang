@@ -15,14 +15,12 @@ PartiQL supports arbitrary-length text data with the string data type.
 [source, ebnf]
 ----
 character_string_literal =
-    quote { character_representation } <quote>
-    [ { separator quote { character_representation } quote } ]
+    quote { character_representation } quote
+    [ { separator quote { character_representation } quote } ] ;
 
-character_representation =
-    non_quote_character
-    | quote_symbol
+character_representation = non_quote_character | quote_symbol ;
 
-quote_symbol = quote quote
+quote_symbol = quote quote ;
 ----
 
 // TODO: We will probably want to eventually support C-style escape sequences. Consider adopting PostgreSQL style c string escapes: https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-ESCAPE
