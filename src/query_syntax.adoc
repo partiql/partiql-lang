@@ -222,7 +222,12 @@ This is equivalent to `<left>, <right>`. PartiQL allows correlation by default, 
 [[sec:let-clause]]
 === LET Clause
 
-_TODO: The LET clause allows binding intermediate computations to variables that can be referenced in subsequent clauses._
+The LET clause allows binding intermediate computations to variables that can be referenced in subsequent clauses.
+
+[source, ebnf]
+----
+let_clause = "LET" expresssion "AS" identifier { ","" expression "AS" identifier } ;
+----
 
 ==== Input and Output Binding Tuples
 
@@ -235,47 +240,28 @@ The `WHERE` clause filters binding tuples based on a boolean condition, passing 
 
 ==== Syntax
 
-[source, partiql]
+[source, ebnf]
 ----
-WHERE <condition>
+where_clause = "WHERE" expression ;
 ----
 
 ==== Semantics
 
-The `WHERE` clause evaluates its condition for each input binding tuple. The condition is evaluated within the environment formed by the database environment and the variables defined in the binding tuple.
+The `WHERE` clause evaluates its condition for each input binding tuple. The condition must evaluate to a boolean type. Only binding tuples where the condition is `true` pass through the `WHERE` clause.
+
+If the condition evaluates to:
+
+* true: The binding tuple is included in the output
+* false: The binding tuple is excluded
+* null or missing: The binding tuple is excluded
 
 ==== Input and Output Binding Tuples
 
 For each input binding tuple where the condition evaluates to `true`, the output consists of that binding tuple unchanged. Binding tuples where the condition evaluates to `false`, `NULL`, `MISSING`, or a non-boolean value (in permissive mode) are excluded from the output.
 
-==== Three-Valued Logic
-
-PartiQL follows SQL's three-valued logic, where conditions can evaluate to `true`, `false`, or `NULL`/`MISSING`. Only binding tuples where the condition is `true` pass through the `WHERE` clause.
-
-If the condition evaluates to:
-
-* `true`: The binding tuple is included in the output
-* `false`: The binding tuple is excluded
-* `NULL` or `MISSING`: The binding tuple is excluded
-* A non-boolean value: The binding tuple is excluded (in permissive mode)
-
-==== NULL and MISSING
-
-PartiQL has two types of absent values: `NULL` and `MISSING`. In boolean expressions, they behave identically:
-
-* `NULL AND TRUE` → `NULL`
-* `MISSING AND TRUE` → `NULL`
-* `NULL OR FALSE` → `NULL`
-* `MISSING OR FALSE` → `NULL`
-
-The predicate `IS MISSING` can distinguish between them:
-
-* `NULL IS MISSING` → `false`
-* `MISSING IS MISSING` → `true`
-
 ==== Type Errors in Permissive Mode
 
-In permissive mode, type errors in the `WHERE` condition are treated as `false`. For example, comparing a string to a number fails gracefully by filtering out the binding tuple rather than aborting the query.
+In permissive mode, if the condition evaluates to a non-boolean value, the condition is treated as false. In type checking mode, evaluation shall fail.
 
 [[sec:group-by-clause]]
 === GROUP BY Clause
