@@ -378,143 +378,69 @@ The `SELECT VALUE` clause is PartiQL's core output mechanism, producing a collec
 
 ==== Syntax
 
-[source, partiql]
+[source, ebnf]
 ----
-SELECT VALUE <expression>
+select_value_clause = "SELECT" [ set_quantifier_strategy ] "VALUE" expression ;
 ----
 
 ==== Semantics
 
-The `SELECT VALUE` clause evaluates its expression for each input binding tuple and collects the results into a bag (or array, if `ORDER BY` is present).
+The `SELECT VALUE` clause evaluates its expression for each input binding tuple and outputs a collection of PartiQL values.
 
 Unlike SQL's `SELECT`, which always produces a collection of tuples, `SELECT VALUE` can produce a collection of any values: scalars, arrays, bags, tuples, or heterogeneous collections.
 
 ==== Input and Output
 
-For each input binding tuple, the expression is evaluated to produce an output value. The output is a collection (bag or array) of these values.
-
-==== Constructors in SELECT VALUE
-
-The `SELECT VALUE` expression frequently uses constructors to build structured output:
-
-===== Tuple Constructors
-
-[source, partiql]
-----
-SELECT VALUE {'attr1': expr1, 'attr2': expr2}
-----
-
-Constructs tuples with specified attributes. Attribute names are expressions (typically string literals) and values are arbitrary expressions.
-
-===== Array Constructors
-
-[source, partiql]
-----
-SELECT VALUE [expr1, expr2, expr3]
-----
-
-Constructs fixed-length arrays.
-
-===== Bag Constructors
-
-[source, partiql]
-----
-SELECT VALUE <<expr1, expr2, expr3>>
-----
-
-Constructs bags (unordered collections with duplicates).
-
-==== Treatment of MISSING
-
-The handling of `MISSING` values differs based on the constructor:
-
-* *In tuple constructors*: If an attribute value evaluates to `MISSING`, the attribute is omitted from the tuple
-* *In array constructors*: `MISSING` values are included in the array
-* *In bag constructors*: `MISSING` values are included in the bag
-* *As direct output*: `MISSING` values are included in the result collection
-
-==== Type Errors in Tuple Constructors
-
-When constructing tuples, if an attribute name expression evaluates to a non-string value:
-
-* In permissive mode: The attribute is omitted
-* In type checking mode: An error is raised
-
-If a tuple constructor produces duplicate attribute names, both attributes are included in the tuple (PartiQL tuples can have duplicate attribute names).
+For each input binding tuple, the expression is evaluated to produce an output value. The output is a collection (bag or array) of these values. Whether or not the input binding tuples represent an ordered collection determines whether to output a bag or array.
 
 [[sec:select-clause]]
 === SELECT Clause
 
 The SQL `SELECT` clause is syntactic sugar over `SELECT VALUE` that specifically constructs tuples. It provides SQL compatibility while leveraging PartiQL's underlying `SELECT VALUE` semantics.
 
-==== Syntax
-
-[source, partiql]
+[source, ebnf]
 ----
-SELECT <expr1> AS <name1>, <expr2> AS <name2>, ...
-----
+select_clause =
+    "SELECT" [ set_quantifier_strategy ] expression AS identifier { "," expression AS identifier }
+    | "SELECT" [ set_quantifier_strategy ] "*" ;
 
-==== Desugaring to SELECT VALUE
+set_quantifier_strategy = "ALL" | "DISTINCT" ;
+----
 
 The SQL `SELECT` clause:
 [source, partiql]
 ----
-SELECT e1 AS a1, e2 AS a2, ..., en AS an
+SELECT
+    e1 AS a1,
+    e2.*,
+    e3
 ----
 
 is equivalent to:
+
 [source, partiql]
 ----
-SELECT VALUE {'a1': e1, 'a2': e2, ..., 'an': an}
+SELECT VALUE TUPLEUNION(
+    {'a1': e1},
+    CASE WHEN e2 IS TUPLE THEN e2 ELSE {'_2': e2} END,
+    {'e3': e3}
+)
 ----
+
+Notably, all items in a `SELECT` clause are set as arguments to `TUPLEUNION` after being transformed in the following ways:
+
+* **Projection Items**: are replaced with a single-attribute tuple, using the user-defined identifier as the attribute name, and the evaluated expression's value as the attribute value
+* **Spread Operators**: are replaced with a `CASE-WHEN` to ensure that the value is _always_ a tuple
+
+The semantics of the `SELECT` clause are identical to the equivalent `SELECT VALUE` clause.
 
 ==== Implicit Attribute Names
 
 When an alias is omitted, PartiQL infers an attribute name:
 
+* If the expression is a variable reference, the variable name is used
 * If the expression is a path ending in an attribute name (e.g., `x.attr`), the attribute name is used
 * Otherwise, a system-generated name is used (implementation-dependent)
-
-For example:
-[source, partiql]
-----
-SELECT x.price, x.quantity * 2
-----
-
-is equivalent to:
-[source, partiql]
-----
-SELECT x.price AS price, x.quantity * 2 AS _2
-----
-
-(where `_2` represents a system-generated name)
-
-==== SELECT *
-
-The `SELECT *` syntax expands to include all attributes from tuple-valued variables:
-
-[source, partiql]
-----
-SELECT x.*
-----
-
-When `x` is bound to a tuple, this includes all attributes of `x` in the output tuple. When `x` is not a tuple, it is coerced to a singleton tuple with a system-generated attribute name.
-
-Multiple `*` items and regular expressions can be combined:
-[source, partiql]
-----
-SELECT x.*, expr AS name, y.*
-----
-
-This uses the `TUPLEUNION` function to combine attributes from multiple sources into a single tuple. Duplicate attribute names may result.
-
-*Binding Tuples Flow:*
-
-* Input: B_SELECT^in (binding tuples from preceding clauses)
-* Processing: For each binding tuple b, evaluate the SELECT expressions and construct a tuple
-* Output: A bag or array of tuples (one tuple per input binding tuple)
-
-_TODO: Need to add tupleunion and IS NOT TUPLE cases here_
 
 [[sec:pivot-clause]]
 === PIVOT Clause
