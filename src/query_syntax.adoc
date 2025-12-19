@@ -360,9 +360,9 @@ GROUP BY expr
 
 The `HAVING` clause filters groups after grouping has occurred:
 
-[source, partiql]
+[source, ebnf]
 ----
-HAVING <condition>
+having_clause = "HAVING" condition ;
 ----
 
 The `HAVING` clause behaves like a `WHERE` clause but operates on group-level binding tuples. It can reference grouping variables and the group variable, and typically includes aggregate functions.
@@ -381,6 +381,8 @@ The `SELECT VALUE` clause is PartiQL's core output mechanism, producing a collec
 [source, ebnf]
 ----
 select_value_clause = "SELECT" [ set_quantifier_strategy ] "VALUE" expression ;
+
+set_quantifier_strategy = "ALL" | "DISTINCT" ;
 ----
 
 ==== Semantics
@@ -403,8 +405,6 @@ The SQL `SELECT` clause is syntactic sugar over `SELECT VALUE` that specifically
 select_clause =
     "SELECT" [ set_quantifier_strategy ] expression AS identifier { "," expression AS identifier }
     | "SELECT" [ set_quantifier_strategy ] "*" ;
-
-set_quantifier_strategy = "ALL" | "DISTINCT" ;
 ----
 
 The SQL `SELECT` clause:
@@ -447,11 +447,9 @@ When an alias is omitted, PartiQL infers an attribute name:
 
 The `PIVOT` clause constructs a single tuple with a data-dependent number of attributes, where both attribute names and values come from the data.
 
-==== Syntax
-
-[source, partiql]
+[source, ebnf]
 ----
-PIVOT <value_expression> AT <name_expression>
+pivot_clause = "PIVOT" expression "AT" name_expression
 ----
 
 ==== Semantics
