@@ -1,0 +1,30 @@
+[[sec:data-types]]
+== Data Types
+
+PartiQL provides a rich type system designed to bridge the gap between SQL's traditional relational model and the requirements of modern semi-structured and nested data. The type system is founded on two core principles: maintaining compatibility with SQL and extending the type system to naturally represent hierarchical and heterogeneous data.
+
+=== Type System Overview
+
+PartiQL's type system encompasses:
+
+* **SQL-Compatible Scalar Types**: Traditional SQL types including, but not limited to, number types (exact and approximate numerics), character strings, temporal types (date, time, timestamp, interval), binary, and booleans.
+
+* **Complex Types**: Native support for tuples (structures), arrays (ordered collections), and bags (unordered collections), enabling direct representation of nested and hierarchical data without requiring normalization or flattening.
+
+* **Absent Value Semantics**: Distinct treatment of `NULL` (explicit null values, as in SQL) and `MISSING` (absent or non-existent data), providing precise semantics for semi-structured data where attributes may or may not be present.
+
+* **Data Format Interoperability**: A flexible type model that enables querying diverse data sources—including relational databases, document stores, data lakes, and streaming data—through a unified query interface while preserving the semantics of the underlying data formats.
+
+The type system is designed to be implementation-independent while providing clear semantics for type coercion, comparison, and operations across heterogeneous data. This design allows PartiQL implementations to optimize for specific data formats and storage systems while maintaining consistent query behavior.
+
+The following sections detail PartiQL's added types. Each section describes the syntax, semantics, storage characteristics, and usage patterns for the respective types.
+
+include::types_tuple.adoc[]
+
+include::types_collection.adoc[]
+
+include::types_char.adoc[]
+
+include::types_absent.adoc[]
+
+include::types_external.adoc[]

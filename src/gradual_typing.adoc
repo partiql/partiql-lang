@@ -1,0 +1,29 @@
+[[sec:typing-model]]
+== Typing Model
+
+PartiQL is a _gradually typed_ query language, allowing for data to range from completely untyped (dynamically typed) to statically typed. This flexibility enables PartiQL to work effectively with both traditional relational databases with rigid type definitions and modern semi-structured data stores without predefined type definitions.
+
+The typing model provides several key benefits:
+
+* *Type Optional*: Queries can execute successfully with or without type information
+* *Type Beneficial*: When type information is available, it enables compile-time error detection, query optimization, and better tooling support
+* *Stability*: Query results remain stable when type information is added or modified, maintaining consistent behavior
+
+[[sec:type-validation]]
+=== Type Validation
+
+When type definitions are available, PartiQL can leverage them for validation and optimization. Type validation in PartiQL:
+
+* *Compile-time Error Detection*: When type information indicates that a path expression will always return `MISSING` (e.g., referencing a non-existent attribute in a table), the query processor may throw a compile-time error. The extent of error detection is implementation-specific.
+
+* *Type Compatibility Checking*: Type definitions enable the query processor to verify type compatibility at compile time. For example, if type definitions indicate that an attribute is always numeric, the processor can validate that operations on that attribute are type-appropriate.
+
+* *SQL Compatibility*: In the presence of type validation that matches SQL's rigid type definitions, PartiQL behaves identically to SQL. For instance, referring to a non-existent column in a SQL table will produce a compilation error, just as it does in SQL.
+
+Type validation is optional and its availability depends on:
+
+1. Whether the data source provides type information
+2. Whether the query explicitly references type information
+3. The implementation's capabilities for type inference and validation
+
+Type inference in PartiQL is conservative: when type information cannot be reliably inferred, the system defaults to treating values as having union types (capable of being any PartiQL type), maintaining the permissive behavior expected for dynamically typed data.

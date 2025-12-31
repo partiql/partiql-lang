@@ -12,7 +12,7 @@ The PartiQL Specification Committee
 :sectlinks:
 :sectnumlevels: 5
 :toc: left
-:toclevels: 4
+:toclevels: 2
 :toc-title: Contents
 :pagenums:
 :imagesdir: ../build/images
@@ -33,20 +33,15 @@ The PartiQL Specification Committee
 
 
 include::license.adoc[]
-
+include::preamble.adoc[]
 include::introduction.adoc[]
-
-include::model.adoc[]
-include::environment.adoc[]
-include::paths.adoc[]
-include::from.adoc[]
-include::select.adoc[]
-include::predsFunctions.adoc[]
-include::where.adoc[]
-include::subqueryCoercion.adoc[]
-include::scoping.adoc[]
-include::groupby.adoc[]
-include::orderby.adoc[]
-include::setops.adoc[]
-include::pivot.adoc[]
-include::schema.adoc[]
+include::gradual_typing.adoc[]
+include::execution_modes.adoc[]
+include::types.adoc[]
+include::type_conversions.adoc[]
+include::database_environments.adoc[]
+include::name_resolution.adoc[]
+include::functions.adoc[]
+include::query_syntax.adoc[]
+include::subqueries.adoc[]
+include::appendix.adoc[]
