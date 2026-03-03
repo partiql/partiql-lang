@@ -1,0 +1,1653 @@
+[appendix]
+[[sec:appendix]]
+== Appendix
+
+[[sec:appendix-environments-examples]]
+=== Examples: Environments and Binding Tuples
+
+This section provides detailed examples illustrating how binding tuples flow through PartiQL query evaluation.
+
+[[sec:appendix-example-basic-evaluation]]
+==== Example: Basic Environment Evaluation
+
+Consider the following database with a single named value `mydb.log`:
+
+[source%unbreakable, partiql]
+----
+mydb.log: {
+  'fileVersion': '1.0',
+  'configurationItems': [
+    { 'resourceId': 'r-001', 'status': 'active' },
+    { 'resourceId': 'r-002', 'status': 'inactive' },
+    { 'resourceId': 'r-003', 'status': 'active' }
+  ]
+}
+----
+
+The database environment contains a single binding:
+
+[stem]
+++++
+p_0 = <<"mydb.log" : {'fileVersion': '1.0', 'configurationItems': [...]}>>
+++++
+
+Now consider this query:
+
+[source%unbreakable, partiql]
+----
+SELECT x.resourceId
+FROM mydb.log.configurationItems x
+----
+
+This query is evaluated within:
+
+* Database environment: stem:[p_0] as shown above
+* Variables environment: stem:[p = <<>>] (empty, since this is not a subquery)
+
+The `FROM` clause produces a bag of binding tuples, one for each element in the `configurationItems` array:
+
+[stem]
+++++
+B_"FROM"^"out" = <<
+  <<x : {'resourceId': 'r-001', 'status': 'active'}>>,
+  <<x : {'resourceId': 'r-002', 'status': 'inactive'}>>,
+  <<x : {'resourceId': 'r-003', 'status': 'active'}>>
+>>
+++++
+
+The `SELECT` clause then evaluates `x.resourceId` for each binding tuple. For the first binding tuple where stem:[x] is bound to `{'resourceId': 'r-001', 'status': 'active'}`, the evaluation proceeds as:
+
+[stem]
+++++
+(p_0, <<x : {'resourceId': 'r-001', 'status': 'active'}>>) |-- "x.resourceId" -> "'r-001'"
+++++
+
+[[sec:appendix-example-binding-tuple-flow]]
+==== Example: Binding Tuple Flow Through Query Clauses
+
+Consider a more complex query that demonstrates how binding tuples flow from one clause to the next:
+
+Database environment:
+
+[stem]
+++++
+p_0 = <<
+  "mydb.r" : [3, 'x'],
+  "mydb.s" : <<{'a':1, 'b':2}, {'a':3}>>
+>>
+++++
+
+Variables environment (top-level query):
+
+[stem]
+++++
+p = <<>>
+++++
+
+Query:
+
+[source%unbreakable, partiql]
+----
+SELECT x AS foo, y.a AS bar
+FROM mydb.r AS x, mydb.s AS y
+WHERE x > y.b
+----
+
+*FROM clause output:*
+
+The `FROM` clause produces the cross product of `mydb.r` and `mydb.s`:
+
+[stem]
+++++
+B_"FROM"^"out" = B_"WHERE"^"in" = <<
+  <<x:3, y:{'a':1, 'b':2}>>,
+  <<x:3, y:{'a':3}>>,
+  <<x:'x', y:{'a':1, 'b':2}>>,
+  <<x:'x', y:{'a':3}>>
+>>
+++++
+
+*WHERE clause evaluation:*
+
+The `WHERE` condition `x > y.b` is evaluated for each binding tuple. For the first binding tuple:
+
+[stem]
+++++
+(p_0, <<x:3, y:{'a':1, 'b':2}>>) |-- "x > y.b" -> "3 > 2" -> "true"
+++++
+
+For the second binding tuple, `y` does not have attribute `b`, so `y.b` evaluates to `MISSING`, and the comparison results in `MISSING` (which fails the WHERE condition).
+
+For the third binding tuple, `x` is the string `'x'`, which cannot be compared with number `2`, resulting in a type mismatch.
+
+*WHERE clause output:*
+
+[stem]
+++++
+B_"WHERE"^"out" = B_"SELECT"^"in" = <<
+  <<x:3, y:{'a':1, 'b':2}>>
+>>
+++++
+
+*SELECT clause evaluation:*
+
+The `SELECT` clause evaluates its expressions for the single binding tuple:
+
+[stem]
+++++
+(p_0, <<x:3, y:{'a':1, 'b':2}>>) |-- "x" -> 3
+(p_0, <<x:3, y:{'a':1, 'b':2}>>) |-- "y.a" -> 1
+++++
+
+*Final result:*
+
+[stem]
+++++
+<<{'foo':3, 'bar':1}>>
+++++
+
+[[sec:appendix-example-nested-queries]]
+==== Example: Variables Environment in Nested Queries
+
+This example illustrates how the variables environment changes in nested queries.
+
+Database environment:
+
+[stem]
+++++
+p_0 = <<"customers" : <<{'id':1, 'name':'Alice'}, {'id':2, 'name':'Bob'}>>
+++++
+
+Query:
+
+[source%unbreakable, partiql]
+----
+SELECT c.name, 
+       (SELECT x.id FROM customers AS x WHERE x.id = c.id) AS matchingIds
+FROM customers AS c
+----
+
+*Outer FROM clause:*
+
+Evaluated with stem:[p = <<>>]:
+
+[stem]
+++++
+B_"FROM,outer"^"out" = <<
+  <<c : {'id':1, 'name':'Alice'}>>,
+  <<c : {'id':2, 'name':'Bob'}>>
+>>
+++++
+
+*Inner subquery evaluation for first binding:*
+
+The subquery `(SELECT x.id FROM customers AS x WHERE x.id = c.id)` is evaluated with:
+
+* Database environment: stem:[p_0] (same as outer)
+* Variables environment: stem:[p = <<c : {'id':1, 'name':'Alice'}>>]
+
+The inner `FROM` clause produces:
+
+[stem]
+++++
+B_"FROM,inner"^"out" = <<
+  <<x : {'id':1, 'name':'Alice'}>>,
+  <<x : {'id':2, 'name':'Bob'}>>
+>>
+++++
+
+For each inner binding tuple, the `WHERE` condition evaluates in the concatenated environment. For the first inner binding:
+
+[stem]
+++++
+p |\ | b = <<c:{'id':1, 'name':'Alice'}>> |\ | <<x:{'id':1, 'name':'Alice'}>>
+       = <<c:{'id':1, 'name':'Alice'}, x:{'id':1, 'name':'Alice'}>>
+++++
+
+The condition `x.id = c.id` evaluates to `1 = 1`, which is `true`.
+
+This example demonstrates how inner queries have access to variables defined by outer queries through the concatenation of binding tuples.
+
+[[sec:appendix-name-resolution-examples]]
+=== Examples: Name Resolution
+
+This section provides detailed examples illustrating PartiQL's name resolution rules.
+
+[[sec:appendix-name-resolution-basic]]
+==== Example: Basic Database-to-Variable Conflicts
+
+This example demonstrates how name resolution differs between FROM clauses and other clauses, and illustrates the potential for naming conflicts when navigating nested data.
+
+Consider a database with the following named data:
+
+[source%unbreakable, partiql]
+----
+t.c: <<
+    {'a':1, 'n':[{'b':11, 'c':12}]},
+    {'a':2, 'n':[{'b':21, 'c':22}]}
+>>
+x.n: << {'b':3} >>
+y: {'a':1, 'b':2}
+----
+
+Database environment:
+
+[stem]
+++++
+p_0 = <<
+  "t.c" : <<{'a':1, 'n':[...]}, {'a':2, 'n':[...]}>>
+  "x.n" : <<{'b':3}>>,
+  "y" : {'a':1, 'b':2}
+>>
+++++
+
+Now consider the query:
+
+[source%unbreakable, partiql]
+----
+SELECT t.a
+FROM t.c AS x
+WHERE x.a IN (SELECT y.b FROM x.n AS y)
+----
+
+*Name Resolution Analysis:*
+
+1. **`t.c` in FROM clause**: Since this is in a FROM clause, resolution attempts database-first. The qualified name `t.c` matches a database name in stem:[p_0], so it resolves to the database collection.
+
+2. **`x.a` in WHERE clause**: The `x` was bound by the outer FROM clause as a variable. Since `x.a` appears in a WHERE clause (non-FROM context), resolution is variables-first. Variable `x` exists in stem:[p], so `x.a` refers to attribute `a` of variable `x`.
+
+3. **`x.n` in inner FROM clause**: This appears in an inner FROM clause, so resolution is database-first. The qualified name `x.n` exists in the database environment stem:[p_0], so it resolves to the database collection `x.n`, NOT to the `n` attribute of variable `x`.
+
+4. **`y.b` in inner SELECT clause**: Since this is in a SELECT clause (non-FROM context), resolution is variables-first. Variable `y` was bound by the inner FROM clause, so `y.b` refers to attribute `b` of variable `y`, NOT to attribute `b` of database object `y`.
+
+*Key Observations:*
+
+* In FROM clauses: Database names take priority (so `x.n` resolves to database name)
+* In non-FROM clauses: Variables take priority (so `y.b` resolves to variable `y`)
+* This asymmetry ensures both database access and nested data navigation work intuitively
+
+[[sec:appendix-name-resolution-at-prefix]]
+==== Example: Using the `@` Prefix
+
+This example demonstrates the `@` prefix for explicit variable references and illustrates the concept of immediately nested expressions.
+
+Database environment:
+
+[stem]
+++++
+p_0 = <<
+  "coll" : <<{'id':1}, {'id':2}>>,
+  "v.foo" : <<{'x':10}>>,
+  "w" : <<{'data':100}>>
+>>
+++++
+
+Query:
+
+[source%unbreakable, partiql]
+----
+SELECT v.foo
+FROM coll AS v, @v.foo AS w, 
+     (SELECT w.a, u.b FROM @w.bar AS u)
+         AS x
+----
+
+*Name Resolution Analysis:*
+
+1. **`v.foo` in SELECT clause (line 1)**:
+
+** Non-FROM context, so variables-first
+** Variable `v` exists (bound by FROM clause)
+** Resolves to attribute `foo` of variable `v`
+
+2. **`coll` in FROM clause (line 2)**:
+
+** Immediately nested in FROM clause, so database-first
+** Database name `coll` exists in stem:[p_0]
+** Resolves to database collection `coll`
+
+3. **`@v.foo` in FROM clause (line 2)**:
+
+** The `@` prefix forces variables-first resolution
+** Variable `v` exists in stem:[p]
+** Resolves to attribute `foo` of variable `v`
+** Without the `@`, this would resolve to database name `v.foo` (due to FROM clause database-first rule)
+
+4. **`@w.bar` in inner FROM clause (line 3)**:
+
+** The `@` prefix forces variables-first resolution
+** Variable `w` exists (bound in line 2)
+** Resolves to attribute `bar` of variable `w`
+** This is immediately nested in the inner FROM clause
+
+5. **`w.a` in inner SELECT clause (line 3)**:
+
+** Non-FROM context, so variables-first
+** Variable `w` exists in the environment
+** Resolves to attribute `a` of variable `w`
+** Note: `w.a` is NOT immediately nested in the outer FROM clause. It appears within a subquery in the FROM clause, but it's immediately nested in the subquery's SELECT clause.
+
+6. **`u.b` in inner SELECT clause (line 3)**:
+
+** Non-FROM context, so variables-first
+** Variable `u` exists (bound by inner FROM)
+** Resolves to attribute `b` of variable `u`
+** Also not immediately nested in the outer FROM
+
+*Key Observations:*
+
+* `@` prefix overrides the default resolution strategy to always try variables first
+* Immediately nested means "directly in the FROM clause of the immediately enclosing SFW query"
+* Expressions in subqueries follow their own clause context rules, not the outer FROM context
+
+[[sec:appendix-name-resolution-shadowing]]
+==== Example: Variable-to-Variable Shadowing
+
+This example illustrates how inner query variables shadow outer query variables through binding tuple concatenation.
+
+Database environment:
+
+[stem]
+++++
+p_0 = <<"products" : <<{'id':1, 'name':'Widget'}, {'id':2, 'name':'Gadget'}>>
+++++
+
+Query:
+
+[source%unbreakable, partiql]
+----
+SELECT p.name,
+       (SELECT p.id FROM products AS p WHERE p.id = 1) AS innerResult
+FROM products AS p
+WHERE p.id > 0
+----
+
+*Evaluation with Variable Shadowing:*
+
+*Outer FROM clause:* Creates binding tuples:
+
+[stem]
+++++
+<<p : {'id':1, 'name':'Widget'}>>,
+<<p : {'id':2, 'name':'Gadget'}>>
+++++
+
+*For first outer binding:*
+
+Variables environment for outer query expressions:
+
+[stem]
+++++
+p_{"outer"} = <<p : {'id':1, 'name':'Widget'}>>
+++++
+
+*Inner subquery in SELECT clause:*
+
+The subquery `(SELECT p.id FROM products AS p WHERE p.id = 1)` is evaluated with the outer variables environment stem:[p_{"outer"}].
+
+The inner FROM clause produces:
+
+[stem]
+++++
+<<p : {'id':1, 'name':'Widget'}>>,
+<<p : {'id':2, 'name':'Gadget'}>>
+++++
+
+For each inner binding tuple stem:[b_{"inner"}], expressions are evaluated in:
+
+[stem]
+++++
+p_{"outer"} |\ | b_{"inner"}
+++++
+
+For the first inner binding:
+
+[stem]
+++++
+<<p:{'id':1, 'name':'Widget'}>> |\ | <<p:{'id':1, 'name':'Widget'}>>
+= <<p:{'id':1, 'name':'Widget'}>>
+++++
+
+The right-precedence rule means the inner `p` shadows the outer `p`. When evaluating `p.id` in the inner SELECT or WHERE, it refers to the inner binding, not the outer binding.
+
+*Resolution:*
+
+* In the outer SELECT `p.name`: References the outer variable `p`
+* In the inner FROM `products`: Database-first resolution finds database name
+* In the inner WHERE `p.id = 1`: References the inner variable `p` (which shadows outer `p`)
+* In the inner SELECT `p.id`: References the inner variable `p`
+
+This shadowing behavior matches standard lexical scoping in programming languages.
+
+[[sec:appendix-name-resolution-longest-match]]
+==== Example: Longest Database Name Match
+
+This example demonstrates how qualified name resolution chooses the longest matching database name.
+
+Database environment:
+
+[stem]
+++++
+p_0 = <<
+  "db" : {'schema': {...}},
+  "db.schema" : {'table': [...]},
+  "db.schema.table" : <<{'col':1}, {'col':2}>>
+>>
+++++
+
+Variables environment:
+
+[stem]
+++++
+p = <<>>
+++++
+
+Query:
+
+[source%unbreakable, partiql]
+----
+SELECT x.col
+FROM db.schema.table AS x
+----
+
+*Name Resolution for `db.schema.table`:*
+
+Since this is in a FROM clause, resolution is database-first with longest match:
+
+* Try `db.schema.table` as a database name: **Match found** (length 3)
+* Try `db.schema` as a database name: Match found (length 2)  
+* Try `db` as a database name: Match found (length 1)
+
+The algorithm selects the longest match: `db.schema.table` (length 3).
+
+Result: The FROM clause binds `x` to each element of the collection at database name `db.schema.table`.
+
+Now consider this query:
+
+[source%unbreakable, partiql]
+----
+SELECT db.schema.table.col
+FROM someSource AS x
+----
+
+*Name Resolution for `db.schema.table.col`:*
+
+Since this is in a SELECT clause (non-FROM), resolution is variables-first:
+
+* Try `db` as a variable: Not found
+* Try longest database name match starting with `db`:
+** Try `db.schema.table` as database name: Match found (length 3)
+
+The path resolves as: database name `db.schema.table`, then attribute navigation `.col`.
+
+Result: `db.schema.table.col` refers to attribute `col` of each element in the database collection `db.schema.table`.
+
+[[sec:appendix-query-syntax-examples]]
+=== Examples: Query Syntax and Clause Semantics
+
+This section provides comprehensive examples demonstrating PartiQL query syntax, binding tuple flow, and clause semantics.
+
+[[sec:appendix-from-clause-examples]]
+==== Examples: FROM Clause
+
+===== Basic FROM with Arrays
+
+Consider a database with an array of sensor readings:
+
+[source%unbreakable, partiql]
+----
+sensors: [
+    {'id': 1, 'temp': 72.5},
+    {'id': 2, 'temp': 68.3},
+    {'id': 3, 'temp': 71.0}
+]
+----
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT VALUE s.temp
+FROM sensors AS s
+----
+
+*Binding Tuples Flow:*
+
+The FROM clause produces binding tuples:
+[source%unbreakable]
+----
+B_FROM^out = <<
+    <<s: {'id': 1, 'temp': 72.5}>>,
+    <<s: {'id': 2, 'temp': 68.3}>>,
+    <<s: {'id': 3, 'temp': 71.0}>>
+>>
+----
+
+The SELECT VALUE clause evaluates `s.temp` for each binding tuple, producing:
+[source%unbreakable]
+----
+<<72.5, 68.3, 71.0>>
+----
+
+===== FROM with AT for Position
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {'position': p, 'id': s.id}
+FROM sensors AS s AT p
+----
+
+*Binding Tuples Flow:*
+
+The FROM clause with AT produces:
+[source%unbreakable]
+----
+B_FROM^out = <<
+    <<s: {'id': 1, 'temp': 72.5}, p: 0>>,
+    <<s: {'id': 2, 'temp': 68.3}, p: 1>>,
+    <<s: {'id': 3, 'temp': 71.0}, p: 2>>
+>>
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    {'position': 0, 'id': 1},
+    {'position': 1, 'id': 2},
+    {'position': 2, 'id': 3}
+>>
+----
+
+===== UNPIVOT Example
+
+Consider a tuple representing stock prices:
+
+[source%unbreakable, partiql]
+----
+stocks: {'AMZN': 840.05, 'GOOG': 1250.30, 'MSFT': 310.20}
+----
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {'symbol': sym, 'price': val}
+FROM UNPIVOT stocks AS val AT sym
+----
+
+*Binding Tuples Flow:*
+
+UNPIVOT produces one binding tuple per attribute:
+[source%unbreakable]
+----
+B_FROM^out = <<
+    <<val: 840.05, sym: 'AMZN'>>,
+    <<val: 1250.30, sym: 'GOOG'>>,
+    <<val: 310.20, sym: 'MSFT'>>
+>>
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    {'symbol': 'AMZN', 'price': 840.05},
+    {'symbol': 'GOOG', 'price': 1250.30},
+    {'symbol': 'MSFT', 'price': 310.20}
+>>
+----
+
+===== UNPIVOT with Variables Environment
+
+This example demonstrates how UNPIVOT extends the input variables environment with binding tuples.
+
+If the input variables environment is stem:[<x:10>] and the tuple expression evaluates to `{'a':1, 'b':2}`, then `UNPIVOT` with `AS v AT n` produces:
+
+* stem:[<x:10, v:1, n:'a'>]
+* stem:[<x:10, v:2, n:'b'>]
+
+Each output binding tuple contains the input environment stem:[<x:10>] concatenated with the new bindings for the value variable (`v`) and name variable (`n`).
+
+===== UNPIVOT Type Coercion Examples (Permissive Mode)
+
+These examples demonstrate how UNPIVOT handles type coercion when the expression does not evaluate to a tuple.
+
+*Example 1: UNPIVOT on a scalar value*
+
+Query:
+[source%unbreakable, partiql]
+----
+FROM UNPIVOT 42 AS v AT n
+----
+
+In permissive mode, the scalar value `42` is coerced to `{'_1': 42}`, so this is equivalent to:
+[source%unbreakable, partiql]
+----
+FROM UNPIVOT {'_1': 42} AS v AT n
+----
+
+Result:
+[source%unbreakable]
+----
+B_FROM^out = <<
+    <<v: 42, n: '_1'>>
+>>
+----
+
+*Example 2: UNPIVOT on MISSING*
+
+Query:
+[source%unbreakable, partiql]
+----
+FROM UNPIVOT MISSING AS v AT n
+----
+
+In permissive mode, `MISSING` is coerced to an empty tuple `{}`, which produces no binding tuples:
+
+Result:
+[source%unbreakable]
+----
+B_FROM^out = <<>>  (empty bag)
+----
+
+*Example 3: UNPIVOT on an array*
+
+Query:
+[source%unbreakable, partiql]
+----
+FROM UNPIVOT [1, 2, 3] AS v AT n
+----
+
+In permissive mode, the array is coerced to `{'_1': [1, 2, 3]}`:
+
+Result:
+[source%unbreakable]
+----
+B_FROM^out = <<
+    <<v: [1, 2, 3], n: '_1'>>
+>>
+----
+
+[[sec:appendix-join-examples]]
+==== Examples: JOINs
+
+===== CROSS JOIN with Correlation
+
+Consider nested data where each sensor has an array of readings:
+
+[source%unbreakable, partiql]
+----
+sensors: [
+    {'id': 1, 'readings': [{'time': '10:00', 'val': 72.5}]},
+    {'id': 2, 'readings': [{'time': '10:00', 'val': 68.3}, 
+                           {'time': '10:30', 'val': 69.1}]}
+]
+----
+
+Query that unnests readings:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {'sensor': s.id, 'time': r.time, 'value': r.val}
+FROM sensors AS s, s.readings AS r
+----
+
+*Binding Tuples Flow:*
+
+For the first sensor (s.id = 1):
+[source%unbreakable]
+----
+b_left = <<s: {'id': 1, 'readings': [...]}>
+----
+
+The right side `s.readings` is evaluated with b_left in scope, producing:
+[source%unbreakable]
+----
+B_right = <<
+    <<r: {'time': '10:00', 'val': 72.5}>>
+>>
+----
+
+Combined:
+[source%unbreakable]
+----
+<<s: {'id': 1, 'readings': [...]}, r: {'time': '10:00', 'val': 72.5}>>
+----
+
+For the second sensor (s.id = 2):
+[source%unbreakable]
+----
+b_left = <<s: {'id': 2, 'readings': [...]}>
+----
+
+The right side produces two binding tuples:
+[source%unbreakable]
+----
+B_right = <<
+    <<r: {'time': '10:00', 'val': 68.3}>>,
+    <<r: {'time': '10:30', 'val': 69.1}>>
+>>
+----
+
+Final result:
+[source%unbreakable, partiql]
+----
+<<
+    {'sensor': 1, 'time': '10:00', 'value': 72.5},
+    {'sensor': 2, 'time': '10:00', 'value': 68.3},
+    {'sensor': 2, 'time': '10:30', 'value': 69.1}
+>>
+----
+
+===== LEFT JOIN Example
+
+Consider customers and their orders:
+
+[source%unbreakable, partiql]
+----
+customers: [
+    {'id': 1, 'name': 'Alice'},
+    {'id': 2, 'name': 'Bob'}
+]
+
+orders: [
+    {'custId': 1, 'item': 'Widget', 'qty': 5}
+]
+----
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {'customer': c.name, 'order': o.item}
+FROM customers AS c LEFT JOIN orders AS o ON c.id = o.custId
+----
+
+*Binding Tuples Flow:*
+
+For customer Alice (id=1), matching order exists:
+[source%unbreakable]
+----
+<<c: {'id': 1, 'name': 'Alice'}, o: {'custId': 1, 'item': 'Widget', 'qty': 5}>>
+----
+
+For customer Bob (id=2), no matching order:
+[source%unbreakable]
+----
+<<c: {'id': 2, 'name': 'Bob'}, o: NULL>>
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    {'customer': 'Alice', 'order': 'Widget'},
+    {'customer': 'Bob', 'order': NULL}
+>>
+----
+
+[[sec:appendix-where-examples]]
+==== Examples: WHERE Clause
+
+===== Basic Filtering
+
+Using the sensors data:
+
+[source%unbreakable, partiql]
+----
+SELECT VALUE s
+FROM sensors AS s
+WHERE s.temp > 70
+----
+
+*Binding Tuples Flow:*
+
+Input from FROM:
+[source%unbreakable]
+----
+B_WHERE^in = <<
+    <<s: {'id': 1, 'temp': 72.5}>>,
+    <<s: {'id': 2, 'temp': 68.3}>>,
+    <<s: {'id': 3, 'temp': 71.0}>>
+>>
+----
+
+Condition evaluation:
+
+* For s.id=1: `72.5 > 70` → true (pass)
+* For s.id=2: `68.3 > 70` → false (fail)
+* For s.id=3: `71.0 > 70` → true (pass)
+
+Output:
+[source%unbreakable]
+----
+B_WHERE^out = <<
+    <<s: {'id': 1, 'temp': 72.5}>>,
+    <<s: {'id': 3, 'temp': 71.0}>>
+>>
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    {'id': 1, 'temp': 72.5},
+    {'id': 3, 'temp': 71.0}
+>>
+----
+
+===== NULL and MISSING in WHERE
+
+Consider data with absent values:
+
+[source%unbreakable, partiql]
+----
+readings: [
+    {'sensor': 1, 'status': 'active'},
+    {'sensor': 2, 'status': NULL},
+    {'sensor': 3}
+]
+----
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT VALUE r.sensor
+FROM readings AS r
+WHERE r.status = 'active'
+----
+
+*Evaluation:*
+
+* Sensor 1: `'active' = 'active'` → true (pass)
+* Sensor 2: `NULL = 'active'` → NULL (excluded) (fail)
+* Sensor 3: `MISSING = 'active'` → MISSING (excluded) (fail)
+
+Result:
+[source%unbreakable, partiql]
+----
+<<1>>
+----
+
+[[sec:appendix-group-by-examples]]
+==== Examples: GROUP BY Clause
+
+===== Core GROUP BY with Group Variable
+
+Consider sales data:
+
+[source%unbreakable, partiql]
+----
+sales: [
+    {'region': 'West', 'amount': 100, 'item': 'A'},
+    {'region': 'West', 'amount': 150, 'item': 'B'},
+    {'region': 'East', 'amount': 200, 'item': 'C'}
+]
+----
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {
+    'region': r,
+    'total': (SELECT VALUE s.amount FROM g AS s),
+    'count': COLL_COUNT(g)
+}
+FROM sales AS s
+GROUP BY s.region AS r GROUP AS g
+----
+
+*Binding Tuples Flow:*
+
+Input to GROUP BY:
+[source%unbreakable]
+----
+B_GROUP^in = <<
+    <<s: {'region': 'West', 'amount': 100, 'item': 'A'}>>,
+    <<s: {'region': 'West', 'amount': 150, 'item': 'B'}>>,
+    <<s: {'region': 'East', 'amount': 200, 'item': 'C'}>>
+>>
+----
+
+Partitioned into groups by s.region:
+
+Group for 'West':
+[source%unbreakable]
+----
+<<r: 'West', g: <<
+    <<s: {'region': 'West', 'amount': 100, 'item': 'A'}>>,
+    <<s: {'region': 'West', 'amount': 150, 'item': 'B'}>>
+>>>>
+----
+
+Group for 'East':
+[source%unbreakable]
+----
+<<r: 'East', g: <<
+    <<s: {'region': 'East', 'amount': 200, 'item': 'C'}>>
+>>>>
+----
+
+Output from GROUP BY:
+[source%unbreakable]
+----
+B_GROUP^out = <<
+    <<r: 'West', g: <<...West sales...>>>>,
+    <<r: 'East', g: <<...East sales...>>>>
+>>
+----
+
+Final result:
+[source%unbreakable, partiql]
+----
+<<
+    {'region': 'West', 'total': <<100, 150>>, 'count': 2},
+    {'region': 'East', 'total': <<200>>, 'count': 1}
+>>
+----
+
+===== GROUP ALL Example
+
+Query that counts all sensors above a threshold:
+
+[source%unbreakable, partiql]
+----
+SELECT VALUE {'highTempCount': COLL_COUNT(g)}
+FROM sensors AS s
+WHERE s.temp > 75
+GROUP ALL AS g
+----
+
+If no sensors have temp > 75:
+
+*Binding Tuples Flow:*
+[source%unbreakable]
+----
+B_WHERE^out = <<>>  (empty bag)
+B_GROUP^out = <<g: <<>>>>  (one binding with empty group)
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<{'highTempCount': 0}>>
+----
+
+This demonstrates GROUP ALL always produces output, even with empty input.
+
+===== SQL Aggregate Functions (Implicit Group Variable)
+
+Query using SQL-style aggregates:
+[source%unbreakable, partiql]
+----
+SELECT s.region AS region,
+       SUM(s.amount) AS total,
+       COUNT(*) AS count
+FROM sales AS s
+GROUP BY s.region
+----
+
+This is rewritten to:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {
+    'region': s.region,
+    'total': SUM(SELECT VALUE p.s.amount FROM g AS p),
+    'count': COUNT(g)
+}
+FROM sales AS s
+GROUP BY s.region AS region GROUP AS g
+----
+
+[[sec:appendix-select-value-examples]]
+==== Examples: SELECT VALUE Clause
+
+===== Heterogeneous Collections
+
+SELECT VALUE can produce collections of mixed types:
+
+[source%unbreakable, partiql]
+----
+SELECT VALUE CASE
+    WHEN s.temp > 70 THEN s.temp
+    WHEN s.temp IS NULL THEN 'No reading'
+    ELSE s.id
+END
+FROM sensors AS s
+----
+
+Result might be:
+[source%unbreakable, partiql]
+----
+<<72.5, 'No reading', 3>>
+----
+
+This collection contains numbers, strings, mixing types freely.
+
+===== Nested Collections
+
+Creating nested structure:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {
+    'sensor': s.id,
+    'dailyReadings': [s.morning, s.afternoon, s.evening]
+}
+FROM sensors AS s
+----
+
+===== MISSING Treatment in Constructors
+
+Consider data with missing attributes:
+
+[source%unbreakable, partiql]
+----
+data: [
+    {'a': 1, 'b': 2},
+    {'a': 3}
+]
+----
+
+Tuple constructor:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {'x': d.a, 'y': d.b}
+FROM data AS d
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    {'x': 1, 'y': 2},
+    {'x': 3}
+>>
+----
+
+The 'y' attribute is omitted when d.b is MISSING.
+
+Array constructor:
+[source%unbreakable, partiql]
+----
+SELECT VALUE [d.a, d.b]
+FROM data AS d
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    [1, 2],
+    [3, MISSING]
+>>
+----
+
+MISSING is included in arrays.
+
+[[sec:appendix-select-examples]]
+==== Examples: SELECT Clause
+
+===== Basic SQL SELECT
+
+Traditional SQL-style query:
+[source%unbreakable, partiql]
+----
+SELECT s.id AS sensorId, s.temp AS temperature
+FROM sensors AS s
+WHERE s.temp > 70
+----
+
+This is equivalent to:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {'sensorId': s.id, 'temperature': s.temp}
+FROM sensors AS s
+WHERE s.temp > 70
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    {'sensorId': 1, 'temperature': 72.5},
+    {'sensorId': 3, 'temperature': 71.0}
+>>
+----
+
+===== SELECT * Example
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT s.*
+FROM sensors AS s
+----
+
+When s binds to `{'id': 1, 'temp': 72.5}`, the output includes all attributes:
+[source%unbreakable, partiql]
+----
+<<
+    {'id': 1, 'temp': 72.5},
+    {'id': 2, 'temp': 68.3},
+    {'id': 3, 'temp': 71.0}
+>>
+----
+
+===== Combining * with Expressions
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT s.*, s.temp * 1.8 + 32 AS tempF
+FROM sensors AS s
+----
+
+Result adds computed column:
+[source%unbreakable, partiql]
+----
+<<
+    {'id': 1, 'temp': 72.5, 'tempF': 162.5},
+    {'id': 2, 'temp': 68.3, 'tempF': 154.94},
+    {'id': 3, 'temp': 71.0, 'tempF': 159.8}
+>>
+----
+
+[[sec:appendix-pivot-examples]]
+==== Examples: PIVOT Clause
+
+===== Basic PIVOT
+
+Converting a collection into a single tuple:
+
+[source%unbreakable, partiql]
+----
+prices: [
+    {'ticker': 'AMZN', 'price': 840.05},
+    {'ticker': 'GOOG', 'price': 1250.30}
+]
+----
+
+Query:
+[source%unbreakable, partiql]
+----
+PIVOT p.price AT p.ticker
+FROM prices AS p
+----
+
+*Binding Tuples Flow:*
+
+Input:
+[source%unbreakable]
+----
+B_PIVOT^in = <<
+    <<p: {'ticker': 'AMZN', 'price': 840.05}>>,
+    <<p: {'ticker': 'GOOG', 'price': 1250.30}>>
+>>
+----
+
+For each binding tuple, evaluate name (p.ticker) and value (p.price):
+
+* First: name='AMZN', value=840.05
+* Second: name='GOOG', value=1250.30
+
+Output (single tuple):
+[source%unbreakable, partiql]
+----
+{'AMZN': 840.05, 'GOOG': 1250.30}
+----
+
+===== PIVOT with Filtering
+
+Creating a selective tuple:
+[source%unbreakable, partiql]
+----
+PIVOT p.price AT p.ticker
+FROM prices AS p
+WHERE p.price > 1000
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+{'GOOG': 1250.30}
+----
+
+Only tuples passing WHERE are included in PIVOT.
+
+[[sec:appendix-order-by-examples]]
+==== Examples: ORDER BY Clause
+
+===== Basic Ordering
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT VALUE s
+FROM sensors AS s
+ORDER BY s.temp DESC
+----
+
+*Binding Tuples Flow:*
+
+Before ORDER BY (bag):
+[source%unbreakable]
+----
+<<
+    <<s: {'id': 1, 'temp': 72.5}>>,
+    <<s: {'id': 2, 'temp': 68.3}>>,
+    <<s: {'id': 3, 'temp': 71.0}>>
+>>
+----
+
+After ORDER BY (array):
+[source%unbreakable, partiql]
+----
+[
+    {'id': 1, 'temp': 72.5},
+    {'id': 3, 'temp': 71.0},
+    {'id': 2, 'temp': 68.3}
+]
+----
+
+Note the result is now an array (indicated by square brackets).
+
+===== Heterogeneous Type Ordering
+
+Query with mixed types:
+[source%unbreakable, partiql]
+----
+mixed: [5, 'hello', true, NULL, 2.5, false, 'world']
+----
+
+[source%unbreakable, partiql]
+----
+SELECT VALUE m
+FROM mixed AS m
+ORDER BY m
+----
+
+Result (using order-by less-than):
+[source%unbreakable, partiql]
+----
+[NULL, false, true, 2.5, 5, 'hello', 'world']
+----
+
+Order: NULL/MISSING < booleans < numbers < strings
+
+===== NULLS FIRST vs NULLS LAST
+
+Query:
+[source%unbreakable, partiql]
+----
+SELECT VALUE s.status
+FROM sensors AS s
+ORDER BY s.status NULLS LAST
+----
+
+With data `['active', NULL, 'inactive', MISSING]`:
+
+Result:
+[source%unbreakable, partiql]
+----
+['active', 'inactive', NULL, MISSING]
+----
+
+[[sec:appendix-complex-query-examples]]
+==== Examples: Complex Queries
+
+===== Nesting with GROUP BY
+
+Create nested structure with grouped data:
+
+[source%unbreakable, partiql]
+----
+SELECT VALUE {
+    'region': r,
+    'items': (SELECT VALUE {'item': i.item, 'amount': i.amount}
+              FROM g AS i)
+}
+FROM sales AS s
+GROUP BY s.region AS r GROUP AS g
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    {
+        'region': 'West',
+        'items': <<
+            {'item': 'A', 'amount': 100},
+            {'item': 'B', 'amount': 150}
+        >>
+    },
+    {
+        'region': 'East',
+        'items': <<
+            {'item': 'C', 'amount': 200}
+        >>
+    }
+>>
+----
+
+===== UNPIVOT and PIVOT Round-Trip
+
+Transforming tuple structure:
+
+[source%unbreakable, partiql]
+----
+config: {'timeout': 30, 'retries': 3, 'debug': false}
+----
+
+Filter and reconstruct:
+[source%unbreakable, partiql]
+----
+PIVOT v AT k
+FROM UNPIVOT config AS v AT k
+WHERE v IS NOT NULL
+----
+
+This pattern enables attribute-level filtering on tuples.
+
+===== Multi-Level Unnesting
+
+Deeply nested data:
+[source%unbreakable, partiql]
+----
+departments: [
+    {
+        'name': 'Engineering',
+        'teams': [
+            {
+                'name': 'Frontend',
+                'members': [{'id': 1}, {'id': 2}]
+            },
+            {
+                'name': 'Backend',
+                'members': [{'id': 3}]
+            }
+        ]
+    }
+]
+----
+
+Flatten to individual members:
+[source%unbreakable, partiql]
+----
+SELECT VALUE {
+    'dept': d.name,
+    'team': t.name,
+    'member': m.id
+}
+FROM departments AS d, d.teams AS t, t.members AS m
+----
+
+*Binding Tuples Flow:*
+
+The cascading joins unnest each level:
+1. FROM departments creates binding for d
+2. d.teams evaluated with d in scope, creates bindings for t
+3. t.members evaluated with both d and t in scope, creates bindings for m
+
+Final bindings contain all three variables:
+[source%unbreakable]
+----
+<<d: {...}, t: {...}, m: {'id': 1}>>
+<<d: {...}, t: {...}, m: {'id': 2}>>
+<<d: {...}, t: {...Backend...}, m: {'id': 3}>>
+----
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    {'dept': 'Engineering', 'team': 'Frontend', 'member': 1},
+    {'dept': 'Engineering', 'team': 'Frontend', 'member': 2},
+    {'dept': 'Engineering', 'team': 'Backend', 'member': 3}
+>>
+----
+
+[[sec:appendix-subquery-coercion-examples]]
+=== Examples: Subquery Coercion
+
+This section provides examples illustrating how PartiQL coerces `SELECT` subqueries into scalars and arrays.
+
+[[sec:appendix-scalar-coercion-basic]]
+==== Example: Basic Scalar Coercion
+
+This example demonstrates the basic rewriting of a `SELECT` subquery into a scalar using `COLL_TO_SCALAR`.
+
+The SQL query:
+
+[source%unbreakable, partiql]
+----
+SELECT v.foo,
+       (SELECT w.bar
+        FROM someDataSet w
+        WHERE w.sth = v.sthelse) AS bar
+FROM anotherDataSet v
+----
+
+is rewritten into:
+
+[source%unbreakable, partiql]
+----
+SELECT VALUE {
+    'foo':  v.foo,
+    'bar':  COLL_TO_SCALAR(SELECT VALUE {'bar':  w.bar}
+                           FROM someDataSet w
+                           WHERE w.sth = v.sthelse)
+}
+FROM anotherDataSet v
+----
+
+[[sec:appendix-scalar-coercion-failure]]
+==== Example: Permissive Mode Handling of Coercion Failures
+
+In this example, the inner `SELECT` evaluates to a collection with more than one element in one instance. Because the `COLL_TO_SCALAR` function produces `MISSING` instead of failing, the query executes successfully.
+
+Consider the tables:
+
+[source%unbreakable, partiql]
+----
+customers :  [
+    {'id':1, 'name':'Mary'},
+    {'id':2, 'name':'Helen'},
+    {'id':1, 'name':'John'}
+]
+orders :  [
+    {'custId':1, 'name':'foo'},
+    {'custId':2, 'name':'bar'}
+]
+----
+
+The following query would fail in SQL because there are two customer tuples with the same id. In a well-designed SQL database with a primary key or uniqueness constraint on the id, there would not be two customers with the same id. However, lack of constraints is typical in data targeted by PartiQL. This query executes in permissive mode.
+
+[source%unbreakable, partiql]
+----
+SELECT o.name AS orderName,
+       (SELECT c.name FROM customers c WHERE c.id=o.custId) AS customerName
+FROM orders o
+----
+
+The result is:
+
+[source%unbreakable, partiql]
+----
+<< {'orderName':'foo'}, {'orderName':'bar', 'customerName':'Helen'} >>
+----
+
+Notice the missing `'customerName'` in the first tuple.
+
+[[sec:appendix-scalar-coercion-static-analysis]]
+==== Example: Static Type Analysis Detecting Coercion Failures
+
+As in SQL, an implementation with static type checks can detect and warn that in certain cases a coercion will always fail and produce `MISSING`.
+
+The following `SELECT` clause is guaranteed to produce tuples with `bar1` and `bar2`, and thus cannot coerce into a scalar:
+
+[source%unbreakable, partiql]
+----
+SELECT w.bar1 AS bar1, w.bar2 AS bar2
+FROM someDataSet w
+----
+
+Static type analysis can infer that the nested query above will deliver tuples consisting of `bar1` and `bar2`. Thus, even before accessing any data, it can warn the user that this query is erroneous.
+
+[[sec:appendix-array-coercion-basic]]
+==== Example: Array Coercion
+
+The reduction of a `SELECT` subquery to PartiQL is exhibited by the following example.
+
+The SQL query:
+
+[source%unbreakable, partiql]
+----
+SELECT v.foo
+FROM anotherDataSet v
+WHERE (v.a, v.b) = (SELECT w.c, w.d
+                    FROM someDataSet w
+                    WHERE w.sth = v.sthelse)
+----
+
+is rewritten into:
+
+[source%unbreakable, partiql]
+----
+SELECT VALUE {'foo':  v.foo}
+FROM anotherDataSet v
+WHERE [v.a, v.b] = (SELECT VALUE [w.c, w.d]
+                    FROM someDataSet w
+                    WHERE w.sth = v.sthelse)
+----
+
+[[sec:appendix-with-clause-examples]]
+=== Examples: WITH Clause (Common Table Expressions)
+
+This section provides examples demonstrating the `WITH` clause for defining Common Table Expressions (CTEs).
+
+[[sec:appendix-with-basic]]
+==== Example: Basic CTE Usage
+
+Consider a database with customer orders:
+
+[source%unbreakable, partiql]
+----
+orders: [
+    {'orderId': 100, 'customerId': 1, 'total': 1200},
+    {'orderId': 101, 'customerId': 2, 'total': 800},
+    {'orderId': 102, 'customerId': 1, 'total': 1500},
+    {'orderId': 103, 'customerId': 3, 'total': 500}
+]
+
+customers: [
+    {'customerId': 1, 'name': 'Alice'},
+    {'customerId': 2, 'name': 'Bob'},
+    {'customerId': 3, 'name': 'Charlie'}
+]
+----
+
+Query using a CTE to filter high-value orders before joining:
+
+[source%unbreakable, partiql]
+----
+WITH high_value_orders AS (
+    SELECT VALUE o
+    FROM orders AS o
+    WHERE o.total > 1000
+)
+SELECT VALUE {'customer': c.name, 'orderId': h.orderId, 'total': h.total}
+FROM customers AS c, high_value_orders AS h
+WHERE c.customerId = h.customerId
+----
+
+*Evaluation:*
+
+. The CTE `high_value_orders` is evaluated first in the database environment, producing:
++
+[source%unbreakable]
+----
+high_value_orders: <<
+    {'orderId': 100, 'customerId': 1, 'total': 1200},
+    {'orderId': 102, 'customerId': 1, 'total': 1500}
+>>
+----
+
+. The CTE name `high_value_orders` is added to the database environment, making it available in the main query.
+
+. The main query references `high_value_orders` like any other database collection.
+
+Result:
+[source%unbreakable, partiql]
+----
+<<
+    {'customer': 'Alice', 'orderId': 100, 'total': 1200},
+    {'customer': 'Alice', 'orderId': 102, 'total': 1500}
+>>
+----
+
+[[sec:appendix-with-multiple]]
+==== Example: Multiple CTEs
+
+Multiple CTEs can be defined to break complex logic into manageable steps:
+
+[source%unbreakable, partiql]
+----
+WITH 
+    high_value_orders AS (
+        SELECT VALUE o
+        FROM orders AS o
+        WHERE o.total > 1000
+    ),
+    premium_customers AS (
+        SELECT VALUE c
+        FROM customers AS c, high_value_orders AS h
+        WHERE c.customerId = h.customerId
+    )
+SELECT VALUE p.name
+FROM premium_customers AS p
+----
+
+*Evaluation:*
+
+1. `high_value_orders` is evaluated first and added to the database environment
+2. `premium_customers` is evaluated next, with access to both the original database collections and the `high_value_orders` CTE
+3. The main query has access to all database collections plus both CTEs
+
+Result:
+[source%unbreakable, partiql]
+----
+<<'Alice'>>
+----
+
+[[sec:appendix-with-refactoring]]
+==== Example: Refactoring Repeated Subqueries
+
+CTEs are particularly useful for factoring out repeated subqueries:
+
+Without CTE (repeated subquery):
+[source%unbreakable, partiql]
+----
+SELECT VALUE {
+    'highValueCount': (SELECT VALUE COUNT(*) 
+                       FROM orders AS o 
+                       WHERE o.total > 1000),
+    'highValueTotal': (SELECT VALUE SUM(o.total) 
+                       FROM orders AS o 
+                       WHERE o.total > 1000)
+}
+----
+
+With CTE (factored once):
+[source%unbreakable, partiql]
+----
+WITH high_value_orders AS (
+    SELECT VALUE o
+    FROM orders AS o
+    WHERE o.total > 1000
+)
+SELECT VALUE {
+    'highValueCount': (SELECT VALUE COUNT(*) FROM high_value_orders AS h),
+    'highValueTotal': (SELECT VALUE SUM(h.total) FROM high_value_orders AS h)
+}
+----
+
+The CTE version is more efficient as the filtering logic is evaluated once rather than twice, and more maintainable as the filter condition is defined in a single location.

@@ -411,7 +411,7 @@ stem:[e_v]. (Technically, stem:[p_0, (p || b) |-- e_a |-> a] and
 stem:[p_0, (p || b) |-- e_v |-> v].) Regardless of whether
 stem:[B_"PIVOT"^"in"] is a bag (i.e., the SFW query did not have an )
 or an array (i.e., the SFW query had an `ORDER BY`), the output tuple
-is unordered. Schema may be applied extantly to obtain an ordered
+is unordered. Type definitions may be applied extantly to obtain an ordered
 tuple.
 
 
@@ -530,7 +530,7 @@ provide a standard convention.
 ==== SQL’s `*`
 
 Consider a query whose `FROM` defines a variable `x` that has no
-schema and the `SELECT` clause includes at least one `x.*`. Let us
+type information and the `SELECT` clause includes at least one `x.*`. Let us
 first consider the simpler case where the `SELECT` clause is a single
 item `x`. Then the clause
 

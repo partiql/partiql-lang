@@ -1,0 +1,105 @@
+[[sec:environments-variables]]
+== Environments and Variables
+
+PartiQL queries are evaluated within an _environment_ that provides bindings for database objects and query variables. This section establishes the foundational concepts of environments and binding tuples that underpin PartiQL's evaluation semantics.
+
+[[sec:environments]]
+=== Environments
+
+Each PartiQL query or subexpression stem:[q] is evaluated within a _bindings environment_ consisting of two distinct components:
+
+* The _database environment_ stem:[p_0], which contains bindings for database objects
+* The _variables environment_ stem:[p], which contains bindings for query variables
+
+The pair stem:[(p_0, p)] collectively forms the bindings environment in which stem:[q] is evaluated.
+
+The two environments serve distinct purposes, analogous to global and local scopes in lexical scoping:
+
+* The _database environment_ stem:[p_0] contains global bindings to database objects. These bindings remain constant throughout query evaluation and are established by the database catalog.
+
+* The _variables environment_ stem:[p] contains local bindings to variables defined within the query itself. These bindings are established by query clauses (such as `FROM`, `LET`, `GROUP BY`) and may vary as the query is evaluated.
+
+The notation stem:[(p_0, p) |-- q -> v] denotes that query stem:[q] evaluates to value stem:[v] when evaluated within database environment stem:[p_0] and variables environment stem:[p]. Every variable reference in stem:[q] is resolved by its binding in stem:[p], and every database name is resolved by its binding in stem:[p_0].
+
+For example, consider the expression `x + y / 2` evaluated with database environment stem:[p_0 = <<x:5>>] and variables environment stem:[p = <<y:3>>]. Then:
+
+[stem]
+++++
+(p_0, p) |-- "x + y / 2" -> "5 + 3 / 2" -> 4
+++++
+
+[[sec:binding-tuples]]
+=== Binding Tuples
+
+An environment is represented as a _binding tuple_ of the form:
+
+[stem]
+++++
+<<x_1:v_1, ..., x_n:v_n>>
+++++
+
+where each stem:[x_i] is a unique _bind name_ that binds to a PartiQL _value_ stem:[v_i].
+
+A binding tuple explicitly represents all variables in its scope, including those with `MISSING` values. For example, stem:[<<x:1, y:"MISSING">>] explicitly shows that variable stem:[y] exists but has value `MISSING`, which differs from stem:[<<x:1>>] where stem:[y] is not present in the binding at all. This distinction is important for correctly evaluating variable references and maintaining semantic precision.
+
+[[sec:binding-tuple-concatenation]]
+=== Binding Tuple Concatenation
+
+Binding tuples can be concatenated to form extended environments. Given two binding tuples stem:[b] and stem:[b'], their concatenation stem:[b |\ | b'] produces a new binding tuple that contains the variable bindings from both stem:[b] and stem:[b'].
+
+When both binding tuples contain a binding for the same variable stem:[x], the concatenation stem:[b |\ | b'] retains the binding from the right operand stem:[b']. That is, the right operand takes precedence in the case of naming conflicts.
+
+This concept will be applied in subsequent sections when describing how binding tuples flow through query clauses and how nested queries access variables from enclosing queries.
+
+[[sec:type-environments]]
+=== Type Environments
+
+At compile time (i.e., during query planning), PartiQL maintains type information through _type environments_ that parallel the runtime value environments.
+
+For a given query stem:[q], two type environments are defined:
+
+* The _database type environment_ stem:[Gamma_0], which contains type bindings for database objects
+* The _variables type environment_ stem:[Gamma], which contains type bindings for query variables
+
+A type environment is represented as a binding tuple of the form:
+
+[stem]
+++++
+<<x_1:tau_1, ..., x_n:tau_n>>
+++++
+
+where each stem:[x_i] is a unique name that binds to a PartiQL _type_ stem:[tau_i].
+
+For dynamically typed databases or values without explicit type definitions, stem:[tau] can be considered the union of all possible types, indicating that any operation is _potentially_ applicable to such values. Type checking and type considerations are discussed in detail in their respective sections.
+
+[[sec:qualified-names]]
+=== Qualified Names
+
+Database objects within the database environment may be referenced using _qualified names_. A qualified name consists of multiple identifiers separated by dots, such as `mydb.log` or `schema.table.column`.
+
+Qualified names only appear in the _database environment_ stem:[p_0]. They represent hierarchical database structures, where each component of the name may denote a schema, table, or other database organizational construct.
+
+In contrast, _variable names_ defined by query clauses are always simple identifiers (e.g., `x`, `customer`, `orderTotal`). These appear in the _variables environment_ stem:[p].
+
+It is important to distinguish qualified names from _quoted identifiers_ that happen to contain dots. The qualified name `mydb.log` represents a hierarchical path through database objects, while the quoted identifier `"mydb.log"` is a single atomic name that literally contains a dot character.
+
+[[sec:query-clauses-binding-tuples]]
+=== Query Clauses
+
+PartiQL's compositional semantics are realized through the uniform treatment of query clauses as functions over binding tuples. Each clause in a PartiQL query (such as `FROM`, `WHERE`, `SELECT`, `GROUP BY`, `HAVING`, `ORDER BY`) can be understood as an operator that:
+
+1. Inputs a collection (bag or array) of binding tuples
+2. Evaluates its constituent expressions within the environment formed by each binding tuple
+3. Outputs a collection of binding tuples for the next clause
+
+This design allows each clause to be understood independently, with clear input and output contracts. For example:
+
+* A `FROM` clause inputs the current environment and outputs a bag of binding tuples, with each tuple binding the `FROM` variables to values from the data sources
+* A `WHERE` clause inputs a bag of binding tuples and outputs the subset that satisfies the condition
+* A `SELECT` clause inputs a collection of binding tuples and outputs the query result by evaluating expressions in each binding's environment
+
+When a clause evaluates an expression in the context of a binding tuple stem:[b], the expression is evaluated in the extended environment stem:[(p_0, p |\ | b)], where stem:[p |\ | b] denotes the concatenation of the query's variables environment stem:[p] with the binding tuple stem:[b].
+
+Each clause's specific semantics—including how it constructs output binding tuples from input binding tuples and how it evaluates expressions—are detailed in their respective sections. The key principle is that binding tuples flow through the query, with each clause transforming them according to its operational semantics.
+
+For more detailed examples illustrating binding tuple flow through query evaluation, see <<sec:appendix>>.

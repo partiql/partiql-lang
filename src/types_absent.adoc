@@ -1,0 +1,32 @@
+[[sec:missing-value]]
+=== Missing Value
+
+PartiQL has two kinds of absent values: `NULL` and `MISSING`. This distinction is fundamental to PartiQL's ability to handle semi-structured, schema-flexible data where attributes may or may not exist across different tuples.
+
+Unlike SQL, where a query that refers to a non-existent attribute name is expected to fail during compilation, PartiQL is designed to operate on dynamically typed, semi-structured data where tuples may have different sets of attributes. The query processor must handle cases where navigation paths fail to bind to any information at runtime. The `MISSING` value serves as the result in such cases, enabling PartiQL to distinguish between the absence of an attribute itself and an attribute that exists but has no value.
+
+[cols="1,1,3", options="header"]
+|===
+|Type |Size |Description
+|`MISSING`
+|Implementation-defined
+|Absent/undefined value (attribute not present in data)
+|===
+
+*EBNF Syntax:*
+[source, ebnf]
+----
+missing_value = "MISSING" ;
+----
+
+==== NULL vs. MISSING
+
+*NULL*: Indicates that a value is absent when a field, attribute, or column is expected to exist, but the value itself is absent. `NULL` marks "this field exists but contains no value," consistent with SQL semantics.
+
+*MISSING*: Represents the absence of the attribute itself—the attribute is not defined in the data structure. `MISSING` values arise when:
+
+1. Using the `MISSING` keyword explicitly
+2. Operations encounter type errors in permissive mode (see <<sec:execution-modes>>)
+3. Navigating to non-existent attributes in permissive mode (see <<sec:path-op>>)
+
+Additional semantics for `MISSING` are detailed in sections covering tuple construction (<<sec:tuple-type>>), function behavior (<<sec:functions>>), grouping (<<sec:eqg>>), and predicates (<<sec:missing-predicate>>).
