@@ -1,0 +1,10 @@
+[[sec:execution-modes]]
+== Execution Modes
+
+PartiQL defines two execution modes that govern how a conforming implementation handles runtime type mismatches and type violations: _permissive mode_ and _type checking mode_. The selection of execution mode determines the semantics applied when operations encounter data that does not conform to expected types or structures.
+
+In *permissive mode*, PartiQL gracefully handles type mismatches and missing data, enabling queries to succeed even when operating on heterogeneous or incomplete data. This mode is designed for semi-structured and dynamically typed data sources where flexibility is paramount. In *type checking mode*, PartiQL enforces strict type checking and raises an error when type mismatches or type violations are encountered at runtime. This mode is applicable to traditional databases with rigid type definitions, or to use cases that require strict data quality validation.
+
+The precise semantics of each execution mode are elaborated upon in subsequent sections of this specification, particularly in the definitions of functions, operators, and query clauses.
+
+Examples of permissive and type checking mode are provided in <<sec:appendix-permissive-example>> and <<sec:appendix-type-checking-example>>, respectively.

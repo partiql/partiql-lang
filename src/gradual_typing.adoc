@@ -1,0 +1,12 @@
+[[sec:typing-model]]
+== Typing Model
+
+PartiQL is a *gradually typed query language*, allowing for data to range from completely untyped (dynamically typed) to statically typed. This flexibility enables PartiQL to work effectively with both traditional relational databases with rigid type definitions and modern semi-structured data stores without predefined type definitions.
+
+The typing model provides several key benefits:
+
+* *Type Optional*: Queries can execute successfully with or without type information
+* *Type Beneficial*: When type information is available, it enables compile-time error detection and query optimization
+* *Stability*: Query results remain stable when type information is added or removed, maintaining consistent behavior
+
+Type inference in PartiQL is conservative: when type information cannot be reliably inferred, the system defaults to treating values as having union types (capable of being any PartiQL type), maintaining the permissive behavior expected for dynamically typed data.
