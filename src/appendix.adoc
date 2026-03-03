@@ -200,7 +200,7 @@ For each inner binding tuple, the `WHERE` condition evaluates in the concatenate
 
 [stem]
 ++++
-p || b = <<c:{'id':1, 'name':'Alice'}>> || <<x:{'id':1, 'name':'Alice'}>>
+p |\ | b = <<c:{'id':1, 'name':'Alice'}>> |\ | <<x:{'id':1, 'name':'Alice'}>>
        = <<c:{'id':1, 'name':'Alice'}, x:{'id':1, 'name':'Alice'}>>
 ++++
 
@@ -397,14 +397,14 @@ For each inner binding tuple stem:[b_{"inner"}], expressions are evaluated in:
 
 [stem]
 ++++
-p_{"outer"} || b_{"inner"}
+p_{"outer"} |\ | b_{"inner"}
 ++++
 
 For the first inner binding:
 
 [stem]
 ++++
-<<p:{'id':1, 'name':'Widget'}>> || <<p:{'id':1, 'name':'Widget'}>>
+<<p:{'id':1, 'name':'Widget'}>> |\ | <<p:{'id':1, 'name':'Widget'}>>
 = <<p:{'id':1, 'name':'Widget'}>>
 ++++
 

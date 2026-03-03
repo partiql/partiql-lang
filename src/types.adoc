@@ -25,6 +25,11 @@ include::types_collection.adoc[]
 
 include::types_char.adoc[]
 
+[[sec:ion-type]]
+=== Ion Type
+
+NOTE: This is a note for the PR reviewers. The old PartiQL specification explicitly talks about `ion_literal`. We have experimented with `VARIANT`, `ION`, `IONB`, etc. If we're serious about incorporating Ion into our type system, we need to have this discussion. In any case, <<sec:external-type-systems>> is a section that talks about external type systems. Depending on our discussion, this may or may not be removed/modified.
+
 include::types_absent.adoc[]
 
 include::types_external.adoc[]

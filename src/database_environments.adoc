@@ -8,7 +8,7 @@ PartiQL queries are evaluated within an _environment_ that provides bindings for
 
 Each PartiQL query or subexpression stem:[q] is evaluated within a _bindings environment_ consisting of two distinct components:
 
-* The _database environment_ stem:[p_0], which contains bindings for database object names
+* The _database environment_ stem:[p_0], which contains bindings for database objects
 * The _variables environment_ stem:[p], which contains bindings for query variables
 
 The pair stem:[(p_0, p)] collectively forms the bindings environment in which stem:[q] is evaluated.
@@ -45,9 +45,9 @@ A binding tuple explicitly represents all variables in its scope, including thos
 [[sec:binding-tuple-concatenation]]
 === Binding Tuple Concatenation
 
-Binding tuples can be concatenated to form extended environments. Given two binding tuples stem:[b] and stem:[b'], their concatenation stem:[b || b'] produces a new binding tuple that contains the variable bindings from both stem:[b] and stem:[b'].
+Binding tuples can be concatenated to form extended environments. Given two binding tuples stem:[b] and stem:[b'], their concatenation stem:[b |\ | b'] produces a new binding tuple that contains the variable bindings from both stem:[b] and stem:[b'].
 
-When both binding tuples contain a binding for the same variable stem:[x], the concatenation stem:[b || b'] retains the binding from the right operand stem:[b']. That is, the right operand takes precedence in the case of naming conflicts.
+When both binding tuples contain a binding for the same variable stem:[x], the concatenation stem:[b |\ | b'] retains the binding from the right operand stem:[b']. That is, the right operand takes precedence in the case of naming conflicts.
 
 This concept will be applied in subsequent sections when describing how binding tuples flow through query clauses and how nested queries access variables from enclosing queries.
 
@@ -98,7 +98,7 @@ This design allows each clause to be understood independently, with clear input 
 * A `WHERE` clause inputs a bag of binding tuples and outputs the subset that satisfies the condition
 * A `SELECT` clause inputs a collection of binding tuples and outputs the query result by evaluating expressions in each binding's environment
 
-When a clause evaluates an expression in the context of a binding tuple stem:[b], the expression is evaluated in the extended environment stem:[(p_0, p || b)], where stem:[p || b] denotes the concatenation of the query's variables environment stem:[p] with the binding tuple stem:[b].
+When a clause evaluates an expression in the context of a binding tuple stem:[b], the expression is evaluated in the extended environment stem:[(p_0, p |\ | b)], where stem:[p |\ | b] denotes the concatenation of the query's variables environment stem:[p] with the binding tuple stem:[b].
 
 Each clause's specific semantics—including how it constructs output binding tuples from input binding tuples and how it evaluates expressions—are detailed in their respective sections. The key principle is that binding tuples flow through the query, with each clause transforming them according to its operational semantics.
 
