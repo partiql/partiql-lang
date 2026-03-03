@@ -12,7 +12,7 @@ The PartiQL Specification Committee
 :sectlinks:
 :sectnumlevels: 5
 :toc: left
-:toclevels: 4
+:toclevels: 2
 :toc-title: Contents
 :pagenums:
 :imagesdir: ../build/images
@@ -31,10 +31,11 @@ The PartiQL Specification Committee
 // TODO html stylesheet; see https://docs.asciidoctor.org/asciidoctor/latest/html-backend/custom-stylesheet/
 // TODO contribute syntax highlighter for partiql/ion to rogue
 
-
 include::license.adoc[]
-
+include::preamble.adoc[]
 include::introduction.adoc[]
+include::gradual_typing.adoc[]
+include::execution_modes.adoc[]
 
 include::model.adoc[]
 include::environment.adoc[]
@@ -50,3 +51,4 @@ include::orderby.adoc[]
 include::setops.adoc[]
 include::pivot.adoc[]
 include::schema.adoc[]
+include::appendix.adoc[]
