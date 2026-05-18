@@ -101,8 +101,6 @@ id_map[42.0]               -- Error: key type mismatch (DECIMAL vs INT)
 id_map[CAST(42.0 AS INT)]  -- OK: explicit cast to INT
 ```
 
-**Other consideration:** Key comparison in MAP lookup leverages the existing `DatumComparator` for equality checks. This ensures consistent comparison semantics across all key types without introducing a separate comparison mechanism for MAP keys.
-
 ## Grammar
 
 ```ebnf
@@ -119,24 +117,27 @@ id_map[CAST(42.0 AS INT)]  -- OK: explicit cast to INT
 
 ## Key Constraints
 
-Keys must support **equality comparison** for lookup and **uniqueness enforcement**. The key type K must be a **comparable scalar type**.
+Keys must support **equality comparison** for lookup and **uniqueness enforcement**. The key type K must be a **comparable type** — a type that has well-defined equality semantics and is hashable. The exact definition of equality is implementation-dependent (e.g., whether string comparison is case-sensitive or uses a specific collation). 
 
-**Allowed key types:**
+`DYNAMIC` is allowed as a declared key type parameter, but the actual runtime type of each key must be a comparable type. Keys within a `MAP<DYNAMIC, V>` may be heterogeneous (e.g., mixing `INT` and `STRING` keys in the same map):
 
-- All numeric types: `TINYINT`, `SMALLINT`, `INTEGER`, `BIGINT`, `DECIMAL`, `REAL`, `DOUBLE`
-- All text types: `CHAR`, `VARCHAR`, `STRING`
-- `BOOL`
-- Date/time types: `DATE`, `TIME`, `TIMEZ`, `TIMESTAMP`, `TIMESTAMPZ`
-- Interval types: `INTERVAL_YM`, `INTERVAL_DT`
-- `DYNAMIC` — allowed, but resolved type should be enforced to allow types.
+```sql
+-- MAP<DYNAMIC, DYNAMIC> — heterogeneous keys allowed
+MAP { 1: 'int_key', 'name': 'string_key', DATE '2026-01-01': 'date_key' }
+```
 
-**Disallowed key types:**
+**Cross-type numeric keys in `MAP<DYNAMIC, V>`:** When using `DYNAMIC` keys, `1` (INT) and `1.0` (DECIMAL) are the **same key** because PartiQL equality treats numerically equivalent values as equal regardless of their specific numeric type (`1 = 1.0` evaluates to `TRUE`):
 
-- `STRUCT`, `ROW` — lack well-defined equality semantics needed for reliable key behavior
-- `ARRAY`, `BAG` — lack well-defined equality semantics needed for reliable key behavior
-- `MAP` — maps as keys are not meaningful
+```sql
+-- 1 (INT) and 1.0 (DECIMAL) are the same key in MAP<DYNAMIC, V>
+MAP { 1: 'int', 1.0: 'decimal' }  -- One entry (duplicate key policy applies)
+```
+
+**Other consideration:** An alternative approach is to treat type as part of value identity, making `1` (INT) and `1.0` (DECIMAL) distinct keys. This would allow both to coexist in the same map but would diverge from PartiQL's existing numeric equality semantics. Implementations may choose this behavior if their use case requires strict type distinction in keys.
 
 **NULL as key:** Disallowed. Since `NULL = NULL` evaluates to `NULL` (not `TRUE`), a NULL key cannot be reliably looked up or deduplicated. Attempting to insert a NULL key raises an error.
+
+**MISSING as key:** Disallowed. MISSING represents the absence of a value and cannot serve as a key. Attempting to insert a MISSING key raises an error. Accessing a map with a MISSING key expression resolves to `MISSING`:
 
 **Duplicate key policy:** Keys must be unique within a MAP. When a MAP is constructed with duplicate keys:
 
@@ -164,13 +165,15 @@ The value type V can be **any** PartiQL type, including:
 
 NULL as value is allowed — e.g., `MAP { 'a': NULL, 'b': 42 }` is valid.
 
+MISSING as value is allowed — e.g., `MAP { 'a': MISSING, 'b': 42 }` is valid. Accessing a key whose value is MISSING returns `MISSING`.
+
 # Map Operations
 ## Type Check
 
 ```sql
 my_map IS MAP         -- TRUE if my_map is a MAP value
-NULL IS MAP           -- FALSE
-MISSING IS MAP        -- FALSE
+NULL IS MAP           -- NULL
+MISSING IS MAP        -- MISSING
 ```
 
 ## Measurement
@@ -221,16 +224,10 @@ MAP_REMOVE(my_map, key)         -- returns a new map with the entry removed
 
 ## Merge
 
-Maps can be merged using spread syntax (analogous to struct spread):
+Maps can be merged using the concat `||` operator:
 
 ```sql
-{ ...map1, ...map2 }  -- entries from map2 override map1 on key conflict
-```
-
-Maps can also be merged using the concat `||` operator:
-
-```sql
-map1 || map2          -- entries from map2 override map1 on key conflict
+map1 || map2          -- key conflict handling follows key policy
 ```
 
 ## Casting
@@ -254,10 +251,9 @@ SELECT * EXCLUDE my_map['unwanted_key'] FROM ...
 
 | Expression | Result |
 |---|---|
-| `NULL IS MAP` | `FALSE` |
-| `MISSING IS MAP` | `FALSE` |
-| `SIZE(NULL)` | `NULL` |
-| `MAP_GET(NULL, k)` | `NULL` |
+| `NULL IS MAP` | `NULL` |
+| `MISSING IS MAP` | `MISSING` |
+| `MAP_GET(NULL, k)` | `MISSING` is permissive and error in strict mode |
 | `MAP_GET(m, NULL)` | `NULL` (key not found) |
 | `MAP_GET(m, missing_key)` | `MISSING` |
 
@@ -289,7 +285,6 @@ The following examples use this common dataset — a `students` table where each
 
 ## Filtering by Key/Value
 
-The `MAP` type does not support standard comparison operators like `<`, `>`. Equality works if two maps have the same keys and values.
 MAP entries can be filtered directly using key lookup or by decomposing with UNPIVOT:
 
 ```sql
@@ -385,7 +380,7 @@ Result:
 
 ## Ordering by Key/Value
 
-The `MAP` type is not orderable. You cannot order by a column with `MAP` type. However, results can be ordered by accessing specific keys or by decomposing with UNPIVOT:
+Results can be ordered by accessing specific keys or by decomposing with UNPIVOT. If an implementation defines comparison ordering for MAP values, `ORDER BY` on a MAP-typed column is also supported (see Comparison Semantics).
 
 ```sql
 -- Order rows by a specific map entry's value.
@@ -611,7 +606,22 @@ Result:
 
 ## Comparison Semantics
 
-MAP comparison is **unordered** (like STRUCT). Two maps are equal if they have the same set of key-value pairs, regardless of insertion order. Ordering of MAP-typed columns (e.g., for `ORDER BY`) is determined by comparing sorted entries.
+MAP comparison semantics are **implementation-defined**. Implementations may choose to support equality, ordering, or both.
+
+**Equality:** If an implementation defines equality for MAP values, two maps are equal if and only if they contain the same set of key-value pairs, regardless of insertion order. When equality is defined, operations that depend on it are supported:
+
+- `=` and `<>` comparison between MAP values
+- `GROUP BY` on a MAP-typed column
+- `DISTINCT` on a MAP-typed column
+- MAP values as join keys
+
+**Ordering:** If an implementation defines a comparison order for MAP values (e.g., by comparing sorted entries lexicographically), operations that depend on ordering are supported:
+
+- `ORDER BY` on a MAP-typed column
+- `<`, `>`, `<=`, `>=` between MAP values
+- Window functions with MAP-typed `ORDER BY` expressions
+
+Implementations that do not define ordering for MAP values should raise an error when these operations are attempted on MAP-typed columns.
 
 
 # Drawbacks
@@ -672,6 +682,10 @@ Without MAP, users must use STRUCT for dictionary data, losing:
 | Duplicate keys | Error | Configurable (error default, last-win option) | Last-write-wins | Error |
 | Missing key | `element_at()` returns NULL | `element_at()` returns NULL | Returns NULL | Returns NULL |
 
+## Programming Languages
+
+- **Python (`dict`)**: PartiQL's `MAP<DYNAMIC, V>` draws from Python's dictionary model — heterogeneous keys of any comparable type, key-based lookup, and last-write-wins for duplicate keys in permissive mode. PartiQL adopts Python's ergonomic bracket access (`m[key]`) and the concept that any "hashable + equality-comparable" type can serve as a key. Key differences from Python: PartiQL MAPs are immutable (like SQL values), type is part of value identity (so `1` INT and `1.0` DECIMAL are distinct keys), and missing key access returns `MISSING` rather than raising an exception.
+
 ## ISO SQL Standard
 
 The ISO SQL standard does not define a MAP type. The closest construct is `MULTISET` (a bag of rows), which can model key-value pairs but without key-uniqueness or typed-key semantics. PartiQL's MAP design is a pragmatic extension drawing from the consensus across Trino, Spark, and Hive.
@@ -683,7 +697,7 @@ The following questions are expected to be resolved through the RFC process:
 1. **Unparameterized MAP**: Should bare `MAP` (without type parameters) default to `MAP<DYNAMIC, DYNAMIC>`
 
 
-2. **Ordering for ORDER BY**: How should a MAP-typed column be ordered? Options include: by sorted entries, by size then sorted entries, or disallow ordering entirely.
+2. **Ordering for ORDER BY**: For implementations that choose to support MAP ordering, what is the recommended algorithm? Options include: by sorted entries (lexicographic), by size then sorted entries, or left entirely to the implementation.
 
 
 3. **PIVOT producing MAP**: Should `PIVOT ... AT ...` produce MAP instead of STRUCT when the key type is non-string?
