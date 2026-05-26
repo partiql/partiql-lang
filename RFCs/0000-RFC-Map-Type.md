@@ -92,13 +92,14 @@ MAP_GET(my_map, 'x')  -- equivalent to my_map['x']
 
 ### Key Type Matching in Lookup
 
-The key expression must match the declared key type of the MAP. If the types do not match, a type mismatch error is raised. An explicit cast is required to convert the key expression to the correct type.
+The key expression type is compared against the declared key type of the MAP. For compatible types, an implicit cast to the target key type is applied (e.g., numeric widening). For incompatible types, a type mismatch error is raised and an explicit cast is required.
 
 ```sql
 -- Given: id_map is MAP<INT, STRING>
-id_map[42]                 -- OK: key is INT
-id_map[42.0]               -- Error: key type mismatch (DECIMAL vs INT)
-id_map[CAST(42.0 AS INT)]  -- OK: explicit cast to INT
+id_map[42]                 -- OK: key is INT (exact match)
+id_map[42.0]               -- OK: implicit cast DECIMAL → INT applied (compatible numeric type)
+id_map['42']               -- Error: key type mismatch (STRING vs INT, incompatible)
+id_map[CAST('42' AS INT)]  -- OK: explicit cast to INT
 ```
 
 ## Grammar
@@ -115,29 +116,17 @@ id_map[CAST(42.0 AS INT)]  -- OK: explicit cast to INT
 
 # Constraints
 
+## Immutability
+
+MAP values in PartiQL are **immutable**. Once constructed, a MAP cannot be modified in place. All operations that appear to modify a MAP (e.g., `MAP_PUT`, `MAP_REMOVE`, `||`) return a **new MAP value** — the original is unchanged. This is consistent with how all PartiQL values (scalars, arrays, structs) behave as immutable data within query evaluation.
+
 ## Key Constraints
 
-Keys must support **equality comparison** for lookup and **uniqueness enforcement**. The key type K must be a **comparable type** — a type that has well-defined equality semantics and is hashable. The exact definition of equality is implementation-dependent (e.g., whether string comparison is case-sensitive or uses a specific collation). 
-
-`DYNAMIC` is allowed as a declared key type parameter, but the actual runtime type of each key must be a comparable type. Keys within a `MAP<DYNAMIC, V>` may be heterogeneous (e.g., mixing `INT` and `STRING` keys in the same map):
-
-```sql
--- MAP<DYNAMIC, DYNAMIC> — heterogeneous keys allowed
-MAP { 1: 'int_key', 'name': 'string_key', DATE '2026-01-01': 'date_key' }
-```
-
-**Cross-type numeric keys in `MAP<DYNAMIC, V>`:** When using `DYNAMIC` keys, `1` (INT) and `1.0` (DECIMAL) are the **same key** because PartiQL equality treats numerically equivalent values as equal regardless of their specific numeric type (`1 = 1.0` evaluates to `TRUE`):
-
-```sql
--- 1 (INT) and 1.0 (DECIMAL) are the same key in MAP<DYNAMIC, V>
-MAP { 1: 'int', 1.0: 'decimal' }  -- One entry (duplicate key policy applies)
-```
-
-**Other consideration:** An alternative approach is to treat type as part of value identity, making `1` (INT) and `1.0` (DECIMAL) distinct keys. This would allow both to coexist in the same map but would diverge from PartiQL's existing numeric equality semantics. Implementations may choose this behavior if their use case requires strict type distinction in keys.
+Keys must support **equality comparison** for lookup and **uniqueness enforcement**. The key type K must be a **comparable type** — a type that has well-defined equality semantics and is hashable. The exact definition of equality is implementation-dependent (e.g., whether string comparison is case-sensitive or uses a specific collation).
 
 **NULL as key:** Disallowed. Since `NULL = NULL` evaluates to `NULL` (not `TRUE`), a NULL key cannot be reliably looked up or deduplicated. Attempting to insert a NULL key raises an error.
 
-**MISSING as key:** Disallowed. MISSING represents the absence of a value and cannot serve as a key. Attempting to insert a MISSING key raises an error. Accessing a map with a MISSING key expression resolves to `MISSING`:
+**MISSING as key:** Disallowed. MISSING represents the absence of a value and cannot serve as a key. Attempting to insert a MISSING key raises an error. Accessing a map with a MISSING key expression resolves to `MISSING` (missing propagation).
 
 **Duplicate key policy:** Keys must be unique within a MAP. When a MAP is constructed with duplicate keys:
 
@@ -161,11 +150,11 @@ The value type V can be **any** PartiQL type, including:
 - Scalars (`INT`, `STRING`, `BOOL`, ...)
 - Collections (`ARRAY`, `BAG`)
 - Containers (`STRUCT`, `ROW`, `MAP`)
-- `DYNAMIC` (heterogeneous values — the unparameterized default)
+- `DYNAMIC` (heterogeneous values)
 
 NULL as value is allowed — e.g., `MAP { 'a': NULL, 'b': 42 }` is valid.
 
-MISSING as value is allowed — e.g., `MAP { 'a': MISSING, 'b': 42 }` is valid. Accessing a key whose value is MISSING returns `MISSING`.
+MISSING as value is allowed — e.g., `MAP { 'a': MISSING, 'b': 42 }` is valid. Accessing a key whose value is MISSING returns `MISSING`. Note: this is semantically distinct from the key not existing — `CONTAINS_KEY(m, 'a')` returns `TRUE` even when the value is MISSING.
 
 # Map Operations
 ## Type Check
@@ -227,7 +216,7 @@ MAP_REMOVE(my_map, key)         -- returns a new map with the entry removed
 Maps can be merged using the concat `||` operator:
 
 ```sql
-map1 || map2          -- key conflict handling follows key policy
+map1 || map2          -- entries from map2 override map1 on key conflict (last-write-wins)
 ```
 
 ## Casting
@@ -253,9 +242,10 @@ SELECT * EXCLUDE my_map['unwanted_key'] FROM ...
 |---|---|
 | `NULL IS MAP` | `NULL` |
 | `MISSING IS MAP` | `MISSING` |
-| `MAP_GET(NULL, k)` | `MISSING` is permissive and error in strict mode |
-| `MAP_GET(m, NULL)` | `NULL` (key not found) |
-| `MAP_GET(m, missing_key)` | `MISSING` |
+| `MAP_GET(NULL, k)` | `NULL` (null propagation) |
+| `MAP_GET(m, NULL)` | `NULL` (null key cannot match any entry) |
+| `MAP_GET(m, MISSING)` | `MISSING` (missing propagation) |
+| `MAP_GET(m, absent_key)` | `MISSING` (permissive) or error (strict) |
 
 ### Sample Data
 
@@ -681,10 +671,12 @@ Without MAP, users must use STRUCT for dictionary data, losing:
 | NULL keys | Disallowed | Disallowed | Allowed | Disallowed |
 | Duplicate keys | Error | Configurable (error default, last-win option) | Last-write-wins | Error |
 | Missing key | `element_at()` returns NULL | `element_at()` returns NULL | Returns NULL | Returns NULL |
+| Equality (`=`) | Supported (order-independent) | Not supported | N/A | Supported (order-sensitive) |
+| Numeric coercion on lookup | Implicit cast | Implicit cast | N/A | Implicit cast |
 
 ## Programming Languages
 
-- **Python (`dict`)**: PartiQL's `MAP<DYNAMIC, V>` draws from Python's dictionary model — heterogeneous keys of any comparable type, key-based lookup, and last-write-wins for duplicate keys in permissive mode. PartiQL adopts Python's ergonomic bracket access (`m[key]`) and the concept that any "hashable + equality-comparable" type can serve as a key. Key differences from Python: PartiQL MAPs are immutable (like SQL values), type is part of value identity (so `1` INT and `1.0` DECIMAL are distinct keys), and missing key access returns `MISSING` rather than raising an exception.
+- **Python (`dict`)**: PartiQL's MAP design draws from Python's dictionary model — key-based lookup, bracket access syntax (`m[key]`), and the concept that any "hashable + equality-comparable" type can serve as a key. PartiQL's permissive mode uses last-write-wins for duplicate keys, matching Python's behavior. Key differences from Python: PartiQL MAPs are immutable (like SQL values), keys and values are typed (not heterogeneous by default), and missing key access returns `MISSING` rather than raising an exception.
 
 ## ISO SQL Standard
 
@@ -694,17 +686,15 @@ The ISO SQL standard does not define a MAP type. The closest construct is `MULTI
 
 The following questions are expected to be resolved through the RFC process:
 
-1. **Unparameterized MAP**: Should bare `MAP` (without type parameters) default to `MAP<DYNAMIC, DYNAMIC>`
+1. **Ordering for ORDER BY**: For implementations that choose to support MAP ordering, what is the recommended algorithm? Options include: by sorted entries (lexicographic), by size then sorted entries, or left entirely to the implementation.
 
 
-2. **Ordering for ORDER BY**: For implementations that choose to support MAP ordering, what is the recommended algorithm? Options include: by sorted entries (lexicographic), by size then sorted entries, or left entirely to the implementation.
-
-
-3. **PIVOT producing MAP**: Should `PIVOT ... AT ...` produce MAP instead of STRUCT when the key type is non-string?
+2. **PIVOT producing MAP**: Should `PIVOT ... AT ...` produce MAP instead of STRUCT when the key type is non-string?
 
 
 # Future possibilities
 
+- **DYNAMIC key type support**: `DYNAMIC` as a value type is allowed (e.g., `MAP<STRING, DYNAMIC>` permits heterogeneous values). Support for `DYNAMIC` as a *key* type parameter (e.g., `MAP<DYNAMIC, STRING>`, `MAP<DYNAMIC, DYNAMIC>`, bare `MAP`) is under investigation and may be added in a future revision. This would allow heterogeneous keys within a single map, similar to Python's `dict`. Key questions that need resolution include: cross-type numeric equality (is `1` INT the same key as `1.0` DECIMAL?), hashing strategy for heterogeneous keys, and whether bare `MAP` without type parameters should default to `MAP<DYNAMIC, DYNAMIC>`.
 - **Collection types as keys**: Extend allowed key types to include `ARRAY` and `BAG` once well-defined equality semantics for collection types are established. This would enable use cases like composite keys (e.g., `MAP<ARRAY<INT>, STRING>`).
 - **MAP Constructor**: A syntax like comprehension `MAP { k: v FOR k, v IN source }` for constructing maps from query results.
 - **MAP_FILTER**: A higher-order function to filter map entries by predicate on key and/or value.
