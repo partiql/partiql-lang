@@ -11,7 +11,7 @@ This RFC proposes the addition of a first-class `MAP<K, V>` type to PartiQL. A M
 PartiQL currently has two container types for key-value data: ROW and STRUCT. Neither adequately models the "typed dictionary" pattern common in real-world data:
 
 - **ROW** models fixed schemas (SQL tuples) — the planner knows exactly which fields exist and their types at compile time, but fields are string-only and the schema is closed.
-- **STRUCT** models schemaless/semi-structured data (Ion structs) — keys are strings, values can be anything, duplicates are allowed, and the planner cannot reason about element types.
+- **STRUCT** models schemaless/semi-structured data (Ion structs) — keys are strings, values can be of any type, duplicate keys are allowed, and the planner cannot reason about element types statically.
 
 Many systems (Hive, Iceberg, Trino, Spark SQL, Presto) support a MAP type for use cases such as:
 
@@ -23,7 +23,7 @@ Many systems (Hive, Iceberg, Trino, Spark SQL, Presto) support a MAP type for us
 Adding MAP as a first-class type allows PartiQL to:
 
 1. Close the gap between PartiQL and other major SQL systems.
-2. Enable type-safe operations — the planner can infer key and value types statically.
+2. Enable type-safe operations — the planner can infer key and value types statically with potential performance gains.
 3. Enforce key uniqueness as a type-level invariant.
 4. Support non-string key types (integers, dates, timestamps, etc.).
 
@@ -131,17 +131,18 @@ Keys must support **equality comparison** for lookup and **uniqueness enforcemen
 **Duplicate key policy:** Keys must be unique within a MAP. When a MAP is constructed with duplicate keys:
 
 - **Strict mode**: raises an error
-- **Permissive mode**: last-write-wins (the last value for a duplicate key is retained)
+- **Permissive mode**: the behavior is implementation-dependent. Implementations may choose one of the following strategies(not limited to):
+  - **Error**: raise an error (same as strict mode)
+  - **First-write-wins**: the first value for a duplicate key is retained
+  - **Last-write-wins**: the last value for a duplicate key is retained
 
 ```sql
 -- Strict mode:
 MAP { 'a': 1, 'a': 2 }  -- Error: duplicate key 'a'
 
--- Permissive mode:
-MAP { 'a': 1, 'a': 2 }  -- Results in MAP { 'a': 2 }
+-- Permissive mode (implementation-dependent):
+MAP { 'a': 1, 'a': 2 }  -- Error, OR MAP { 'a': 1 }, OR MAP { 'a': 2 }
 ```
-
-**Other consideration:** The duplicate key policy may be made configurable or left as implementation-defined behavior. This allows implementations to choose the policy that best fits their use case (e.g., an ingestion engine may prefer last-write-wins for performance, while a validation-oriented system may prefer strict error-on-duplicate).
 
 ## Value Constraints
 
@@ -154,7 +155,7 @@ The value type V can be **any** PartiQL type, including:
 
 NULL as value is allowed — e.g., `MAP { 'a': NULL, 'b': 42 }` is valid.
 
-MISSING as value is allowed — e.g., `MAP { 'a': MISSING, 'b': 42 }` is valid. Accessing a key whose value is MISSING returns `MISSING`. Note: this is semantically distinct from the key not existing — `CONTAINS_KEY(m, 'a')` returns `TRUE` even when the value is MISSING.
+MISSING as value is disallowed. MISSING represents the absence of a value and cannot be stored as a map value. Attempting to insert a MISSING value raises an error.
 
 # Map Operations
 ## Type Check
@@ -191,7 +192,7 @@ For MAP, `k` is the key (of type K, not necessarily string) and `v` is the value
 MAP_KEYS(my_map)                -- returns BAG<K> of all keys
 MAP_VALUES(my_map)              -- returns BAG<V> of all values
 CONTAINS_KEY(my_map, key)       -- returns TRUE if key exists in the map
-MAP_ENTRIES(my_map)             -- returns an array of rows (key, value pairs)
+MAP_ENTRIES(my_map)             -- returns A bag of rows (key, value pairs)
 ```
 
 ## Iteration in MAP
@@ -598,20 +599,20 @@ Result:
 
 MAP comparison semantics are **implementation-defined**. Implementations may choose to support equality, ordering, or both.
 
-**Equality:** If an implementation defines equality for MAP values, two maps are equal if and only if they contain the same set of key-value pairs, regardless of insertion order. When equality is defined, operations that depend on it are supported:
+**Equality:** How equality is determined for MAP values is implementation-defined. For example, an implementation may define two maps as equal if they contain the same set of key-value pairs regardless of insertion order. If equality is defined, the following operations can additionally be supported:
 
 - `=` and `<>` comparison between MAP values
 - `GROUP BY` on a MAP-typed column
 - `DISTINCT` on a MAP-typed column
 - MAP values as join keys
 
-**Ordering:** If an implementation defines a comparison order for MAP values (e.g., by comparing sorted entries lexicographically), operations that depend on ordering are supported:
+**Ordering:** How ordering is determined for MAP values is implementation-defined. For example, an implementation may compare sorted entries lexicographically. If ordering is defined, the following operations can additionally be supported:
 
 - `ORDER BY` on a MAP-typed column
 - `<`, `>`, `<=`, `>=` between MAP values
 - Window functions with MAP-typed `ORDER BY` expressions
 
-Implementations that do not define ordering for MAP values should raise an error when these operations are attempted on MAP-typed columns.
+Implementations that do not define equality or ordering for MAP values should raise an error when these operations are attempted on MAP-typed columns.
 
 
 # Drawbacks
@@ -700,4 +701,4 @@ The following questions are expected to be resolved through the RFC process:
 - **MAP_FILTER**: A higher-order function to filter map entries by predicate on key and/or value.
 - **MAP_TRANSFORM_KEYS / MAP_TRANSFORM_VALUES**: Higher-order functions for transforming keys or values (as in Spark SQL).
 - **MAP aggregation**: An aggregate function like `MAP_AGG(key_expr, value_expr)` to construct a MAP from grouped rows (similar to Trino's `map_agg`).
-- **CONTAINS_KEY as operator**: Syntax like `key IN KEYS(map)`
+- **MULTIMAP type**: A `MULTIMAP<K, V>` type that allows multiple values per key (equivalent to `MAP<K, ARRAY<V>>` but with dedicated semantics and operations for multi-valued lookups, aggregation, and iteration).
