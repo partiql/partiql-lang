@@ -87,8 +87,10 @@ MAP_GET(my_map, 'x')  -- equivalent to my_map['x']
 
 ### When a key is not found:
 
+Accessing a MAP with a key that does not exist follows the same semantics as accessing a missing attribute on a tuple (see [PartiQL Specification §4.1][1]):
+
 - **Permissive mode**: returns `MISSING`
-- **Strict mode**: raises an error (consistent with struct field access behavior)
+- **Strict mode**: raises an error
 
 ### Key Type Matching in Lookup
 
@@ -155,7 +157,7 @@ The value type V can be **any** PartiQL type, including:
 
 NULL as value is allowed — e.g., `MAP { 'a': NULL, 'b': 42 }` is valid.
 
-MISSING as value is disallowed. MISSING represents the absence of a value and cannot be stored as a map value. Attempting to insert a MISSING value raises an error.
+MISSING as value is disallowed. MISSING represents the absence of a value and cannot be stored as a map value. Inserting a MISSING value results in the key being dropped (i.e., the entry is not added to the map).
 
 # Map Operations
 ## Type Check
@@ -702,3 +704,7 @@ The following questions are expected to be resolved through the RFC process:
 - **MAP_TRANSFORM_KEYS / MAP_TRANSFORM_VALUES**: Higher-order functions for transforming keys or values (as in Spark SQL).
 - **MAP aggregation**: An aggregate function like `MAP_AGG(key_expr, value_expr)` to construct a MAP from grouped rows (similar to Trino's `map_agg`).
 - **MULTIMAP type**: A `MULTIMAP<K, V>` type that allows multiple values per key (equivalent to `MAP<K, ARRAY<V>>` but with dedicated semantics and operations for multi-valued lookups, aggregation, and iteration).
+
+# References
+
+- \[1\] [PartiQL Specification §4.1 — Tuple path evaluation on wrongly typed data](https://partiql.org/assets/PartiQL-Specification.pdf)
