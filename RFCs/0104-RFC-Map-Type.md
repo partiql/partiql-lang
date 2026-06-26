@@ -94,13 +94,16 @@ Accessing a MAP with a key that does not exist follows the same semantics as acc
 
 ### Key Type Matching in Lookup
 
-The key expression type is compared against the declared key type of the MAP. For compatible types, an implicit cast to the target key type is applied (e.g., numeric widening). For incompatible types, a type mismatch error is raised and an explicit cast is required.
+The key expression type is compared against the declared key type of the MAP. For compatible types, an implicit cast to the target key type is applied (e.g., numeric widening). For incompatible types:
+
+- **Permissive mode**: returns `MISSING`
+- **Strict mode**: raises a type mismatch error
 
 ```sql
 -- Given: id_map is MAP<INT, STRING>
 id_map[42]                 -- OK: key is INT (exact match)
 id_map[42.0]               -- OK: implicit cast DECIMAL → INT applied (compatible numeric type)
-id_map['42']               -- Error: key type mismatch (STRING vs INT, incompatible)
+id_map['42']               -- MISSING (permissive) or error (strict): STRING vs INT incompatible
 id_map[CAST('42' AS INT)]  -- OK: explicit cast to INT
 ```
 
@@ -124,16 +127,24 @@ MAP values in PartiQL are **immutable**. Once constructed, a MAP cannot be modif
 
 ## Key Constraints
 
-Keys must support **equality comparison** for lookup and **uniqueness enforcement**. The key type K must be a **comparable type** — a type that has well-defined equality semantics and is hashable. The exact definition of equality is implementation-dependent (e.g., whether string comparison is case-sensitive or uses a specific collation).
+Keys must support **equality comparison** for lookup and **uniqueness enforcement**. The key type K must be a **comparable type** — a type that has well-defined equality semantics and is hashable. The exact definition of equality is implementation-defined (e.g., whether string comparison is case-sensitive or uses a specific collation).
 
-**NULL as key:** Disallowed. Since `NULL = NULL` evaluates to `NULL` (not `TRUE`), a NULL key cannot be reliably looked up or deduplicated. Attempting to insert a NULL key raises an error.
+**NULL as key:** Disallowed. Since `NULL = NULL` evaluates to `NULL` (not `TRUE`), a NULL key cannot be reliably looked up or deduplicated. Behavior when a NULL key is encountered during construction:
 
-**MISSING as key:** Disallowed. MISSING represents the absence of a value and cannot serve as a key. Attempting to insert a MISSING key raises an error. Accessing a map with a MISSING key expression resolves to `MISSING` (missing propagation).
+- **Permissive mode**: the entry is silently dropped (consistent with STRUCT behavior for NULL keys)
+- **Strict mode**: the entire MAP expression evaluates to `NULL`
+
+**MISSING as key:** Disallowed. MISSING represents the absence of a value and cannot serve as a key. Behavior when a MISSING key is encountered during construction:
+
+- **Permissive mode**: the entry is silently dropped
+- **Strict mode**: the entire MAP expression evaluates to `MISSING`
+
+Accessing a map with a MISSING key expression resolves to `MISSING` (missing propagation).
 
 **Duplicate key policy:** Keys must be unique within a MAP. When a MAP is constructed with duplicate keys:
 
 - **Strict mode**: raises an error
-- **Permissive mode**: the behavior is implementation-dependent. Implementations may choose one of the following strategies(not limited to):
+- **Permissive mode**: the behavior is implementation-defined. Implementations may choose one of the following strategies(not limited to):
   - **Error**: raise an error (same as strict mode)
   - **First-write-wins**: the first value for a duplicate key is retained
   - **Last-write-wins**: the last value for a duplicate key is retained
@@ -142,7 +153,7 @@ Keys must support **equality comparison** for lookup and **uniqueness enforcemen
 -- Strict mode:
 MAP { 'a': 1, 'a': 2 }  -- Error: duplicate key 'a'
 
--- Permissive mode (implementation-dependent):
+-- Permissive mode (implementation-defined):
 MAP { 'a': 1, 'a': 2 }  -- Error, OR MAP { 'a': 1 }, OR MAP { 'a': 2 }
 ```
 
@@ -193,7 +204,7 @@ For MAP, `k` is the key (of type K, not necessarily string) and `v` is the value
 ```sql
 MAP_KEYS(my_map)                -- returns BAG<K> of all keys
 MAP_VALUES(my_map)              -- returns BAG<V> of all values
-CONTAINS_KEY(my_map, key)       -- returns TRUE if key exists in the map
+MAP_CONTAINS_KEY(my_map, key)       -- returns TRUE if key exists in the map
 MAP_ENTRIES(my_map)             -- returns A bag of rows (key, value pairs)
 ```
 
@@ -245,12 +256,12 @@ SELECT * EXCLUDE my_map['unwanted_key'] FROM ...
 |---|---|
 | `NULL IS MAP` | `NULL` |
 | `MISSING IS MAP` | `MISSING` |
-| `MAP_GET(NULL, k)` | `NULL` (null propagation) |
-| `MAP_GET(m, NULL)` | `NULL` (null key cannot match any entry) |
+| `MAP_GET(NULL, k)` | `NULL` (null propagation on map) |
+| `MAP_GET(m, NULL)` | `NULL` (null propagation on map) |
 | `MAP_GET(m, MISSING)` | `MISSING` (missing propagation) |
 | `MAP_GET(m, absent_key)` | `MISSING` (permissive) or error (strict) |
 
-### Sample Data
+## Sample Data
 
 The following examples use this common dataset — a `students` table where each row has a `name`, a `scores` map (subject to score), and a `tags` map (tag name to tag value):
 
@@ -307,11 +318,11 @@ Result:
 
 ```sql
 -- Filter rows where a specific key exists.
--- CONTAINS_KEY checks for the presence of a key without accessing its value.
+-- MAP_CONTAINS_KEY checks for the presence of a key without accessing its value.
 -- Useful when the key may or may not exist in a given MAP.
 SELECT *
 FROM students
-WHERE CONTAINS_KEY(tags, 'priority')
+WHERE MAP_CONTAINS_KEY(tags, 'priority')
 ```
 
 Result:
@@ -599,23 +610,22 @@ Result:
 
 ## Comparison Semantics
 
-MAP comparison semantics are **implementation-defined**. Implementations may choose to support equality, ordering, or both.
+PartiQL defines default equality and ordering semantics for MAP values. Implementations may override these definitions with alternative semantics as appropriate for their use case.
 
-**Equality:** How equality is determined for MAP values is implementation-defined. For example, an implementation may define two maps as equal if they contain the same set of key-value pairs regardless of insertion order. If equality is defined, the following operations can additionally be supported:
+**Equality:** Two MAP values are equal if and only if they contain the same set of key-value pairs, compared without regard to insertion order. Formally, for maps `m1` and `m2`: `m1 = m2` iff `SIZE(m1) = SIZE(m2)` and for every entry `(k, v)` in `m1`, `m2` contains an entry `(k', v')` such that `k = k'` and `v = v'`. When equality is defined, the following operations are supported:
 
 - `=` and `<>` comparison between MAP values
 - `GROUP BY` on a MAP-typed column
 - `DISTINCT` on a MAP-typed column
 - MAP values as join keys
 
-**Ordering:** How ordering is determined for MAP values is implementation-defined. For example, an implementation may compare sorted entries lexicographically. If ordering is defined, the following operations can additionally be supported:
+**Ordering:** The default ordering for MAP values is defined by sorting the entries of each map by key (then by value) using the type's comparator, and comparing the resulting sorted sequences lexicographically. When ordering is defined, the following operations are supported:
 
 - `ORDER BY` on a MAP-typed column
 - `<`, `>`, `<=`, `>=` between MAP values
 - Window functions with MAP-typed `ORDER BY` expressions
 
-Implementations that do not define equality or ordering for MAP values should raise an error when these operations are attempted on MAP-typed columns.
-
+Implementations that do not support equality or ordering for MAP values shall raise an error when these operations are attempted on MAP-typed columns.
 
 # Drawbacks
 
@@ -685,16 +695,6 @@ Without MAP, users must use STRUCT for dictionary data, losing:
 
 The ISO SQL standard does not define a MAP type. The closest construct is `MULTISET` (a bag of rows), which can model key-value pairs but without key-uniqueness or typed-key semantics. PartiQL's MAP design is a pragmatic extension drawing from the consensus across Trino, Spark, and Hive.
 
-# Unresolved questions
-
-The following questions are expected to be resolved through the RFC process:
-
-1. **Ordering for ORDER BY**: For implementations that choose to support MAP ordering, what is the recommended algorithm? Options include: by sorted entries (lexicographic), by size then sorted entries, or left entirely to the implementation.
-
-
-2. **PIVOT producing MAP**: Should `PIVOT ... AT ...` produce MAP instead of STRUCT when the key type is non-string?
-
-
 # Future possibilities
 
 - **DYNAMIC key type support**: `DYNAMIC` as a value type is allowed (e.g., `MAP<STRING, DYNAMIC>` permits heterogeneous values). Support for `DYNAMIC` as a *key* type parameter (e.g., `MAP<DYNAMIC, STRING>`, `MAP<DYNAMIC, DYNAMIC>`, bare `MAP`) is under investigation and may be added in a future revision. This would allow heterogeneous keys within a single map, similar to Python's `dict`. Key questions that need resolution include: cross-type numeric equality (is `1` INT the same key as `1.0` DECIMAL?), hashing strategy for heterogeneous keys, and whether bare `MAP` without type parameters should default to `MAP<DYNAMIC, DYNAMIC>`.
@@ -707,4 +707,4 @@ The following questions are expected to be resolved through the RFC process:
 
 # References
 
-- \[1\] [PartiQL Specification §4.1 — Tuple path evaluation on wrongly typed data](https://partiql.org/assets/PartiQL-Specification.pdf)
+- [1] [PartiQL Specification §4.1 — Tuple path evaluation on wrongly typed data](https://partiql.org/assets/PartiQL-Specification.pdf)
