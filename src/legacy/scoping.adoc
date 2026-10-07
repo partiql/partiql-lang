@@ -99,7 +99,7 @@ names of the form `identifier.identifier. ...`. The following rules
 apply regarding the semantics of stem:[i_1.i_2. ... .i_n], where
 stem:[i_1, i_2, ..., i_n] are identifiers.
 
-* stem:[\@i_1.i_2. ... .i_n] always refers to the environment variable
+* stem:["@"i_1.i_2. ... .i_n] always refers to the environment variable
 named stem:[i_1]; if there is no such variable and
 stem:[i_1.i_2. ... .i_m, m <= n] is a database name then
 stem:[i_1.i_2. ... .i_m] refers to such named database name. Again, if

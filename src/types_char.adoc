@@ -1,0 +1,27 @@
+[[sec:string-type]]
+=== String Type
+
+PartiQL supports arbitrary-length text data with the string data type.
+
+[cols="1,1,3", options="header"]
+|===
+|Type |Size |Description
+|`STRING`
+|Variable (up to implementation maximum)
+|Variable-length character string up to implementation maximum
+|===
+
+*EBNF Syntax for String Literals:*
+[source, ebnf]
+----
+character_string_literal =
+    quote { character_representation } quote
+    [ { separator quote { character_representation } quote } ] ;
+
+character_representation = non_quote_character | quote_symbol ;
+
+quote_symbol = quote quote ;
+----
+
+// TODO: We will probably want to eventually support C-style escape sequences. Consider adopting PostgreSQL style c string escapes: https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-ESCAPE
+// TODO: We want to eventually codify SQL spec's unicode strings, bit strings, etc.

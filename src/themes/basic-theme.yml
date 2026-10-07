@@ -88,6 +88,9 @@ codespan:
     family: Iosevka
     color: #202020
     style: bold
+  background_color: #EEEEEE
+  border_radius: 3
+  border_offset: 1
   
 code:
   font:
@@ -166,5 +169,3 @@ footer:
       content: $footer-recto-left-content
     right:
       content: $footer-recto-right-content
-
-      

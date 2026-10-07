@@ -1,0 +1,44 @@
+[[sec:collection-types]]
+=== Collection Types
+
+PartiQL supports two fundamental collection types: arrays (ordered) and bags (unordered). Both can contain elements of any PartiQL type and allow duplicates.
+
+[[sec:array-type]]
+==== Array Type
+
+Arrays are ordered collections where elements are accessible by zero-based index.
+
+[cols="1,1,3", options="header"]
+|===
+|Type |Size |Description
+
+|`ARRAY`
+|Variable
+|Ordered, indexed collection allowing duplicates
+|===
+
+*EBNF Syntax:*
+[source, ebnf]
+----
+array_constructor = "[" [ value { "," value } ] "]" ;
+----
+
+[[sec:bag-type]]
+=== Bag Type
+
+Bags are unordered collections where elements are not accessible by position.
+
+[cols="1,1,3", options="header"]
+|===
+|Type |Size |Description
+
+|`BAG`
+|Variable
+|Unordered collection allowing duplicates
+|===
+
+*EBNF Syntax:*
+[source, ebnf]
+----
+bag_constructor = "<<" [ value { "," value } ] ">>" ;
+----

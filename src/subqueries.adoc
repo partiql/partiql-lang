@@ -1,0 +1,33 @@
+[[sec:subqueries]]
+== Subqueries and Subquery Coercion
+
+In PartiQL, as in SQL, expressions may involve subqueries enclosed in parentheses. For compatibility with SQL, a subquery starting with a `SELECT` clause (as opposed to `SELECT VALUE` or `PIVOT`) coerces into a scalar or an array, depending on the context. The following sections detail SQL's coercing behavior and explain when subquery results coerce into scalars versus arrays.
+
+A PartiQL extension beyond SQL is that in permissive mode, subqueries that fail to coerce to the required type (scalar or tuple) still execute rather than failing. They omit from the results the data that correspond to coercion failures.
+
+[[sec:coll-to-scalar]]
+=== Collection to Scalar Function
+
+The `COLL_TO_SCALAR` function is the core mechanism for coercing subquery results into scalar values. When a `SELECT` subquery must be coerced to a scalar, it is first rewritten into an equivalent subquery using `SELECT VALUE` (following the steps of <<sec:select-clause>>), and then `COLL_TO_SCALAR` is applied to the result.
+
+The function follows SQL's coercion rules: when the input is a collection consisting of a single tuple with a single attribute, the input coerces into the value of that attribute. All other inputs to `COLL_TO_SCALAR` result in `MISSING` in permissive mode.
+
+[[sec:select-coercion-scalar]]
+=== Coercion of a `SELECT` Subquery into a Scalar
+
+A subquery coerces into a scalar in each of the following cases:
+
+* If it appears as the right-hand side of a comparison operator (`=`, `>`, etc.) where the left-hand side is not an array literal, or vice versa. (If the left-hand side of a comparison operator is an array literal, it coerces into an array per <<sec:select-coercion-array>>.)
+
+* If it is a subquery expression that (a) is not the collection expression of a `FROM` clause item and (b) is not the right-hand side of an `IN` operator. (If it is the right-hand side of an `IN`, it should not be coerced.)
+
+A subquery that is coerced may appear in all clauses except the `FROM`. For example, it may be a `SELECT` subquery that appears as an item of a `SELECT`, `SELECT VALUE`, or `PIVOT` clause, or as a subexpression of an expression in these clauses. It may also be a subexpression of the `WHERE` clause expression, provided it is not the right-hand side of an `IN`. In any of these cases, the subquery result is cast into a scalar.
+
+See <<sec:appendix-scalar-coercion-basic>> for a basic example of scalar coercion, <<sec:appendix-scalar-coercion-failure>> for an example of permissive mode handling of coercion failures, and <<sec:appendix-scalar-coercion-static-analysis>> for an example of static type analysis detecting coercion failures.
+
+[[sec:select-coercion-array]]
+=== Coercion of a `SELECT` Subquery into an Array
+
+A `SELECT` subquery coerces into an array when it is the right-hand side (or left-hand side) of a comparison operator whose other argument is an array.footnote:[Recall, in the interest of compatibility with SQL, PartiQL allows array literals to be denoted with parentheses instead of brackets (see <<sec:array-type>>).]
+
+See <<sec:appendix-array-coercion-basic>> for an example of array coercion.

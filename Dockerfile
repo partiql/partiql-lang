@@ -36,4 +36,4 @@ RUN /bin/bash -- ${BOOTSTRAP_DIR}/docker-bootstrap.sh
 
 WORKDIR $WORKSPACE_DIR
 
-CMD /bin/bash ./docker-run.sh
+CMD ["/bin/bash", "./docker-run.sh"]

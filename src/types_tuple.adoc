@@ -1,0 +1,30 @@
+[[sec:tuple-type]]
+=== Tuple Type
+
+Tuples are collections of attribute-value pairs, where each attribute has a name (string) and an associated value of any PartiQL type. Tuples may contain duplicate attribute names, though this is not encouraged.
+
+[cols="1,1,3", options="header"]
+|===
+|Type |Bit Size |Description
+
+|`TUPLE`
+|Variable
+|Collection of named attribute-value pairs
+|===
+
+*Tuple Construction*
+[source, ebnf]
+----
+tuple_constructor = "{" [ attribute_pair { "," attribute_pair } ] "}" ;
+
+attribute_pair = expression ":" expression ;
+----
+
+When constructing tuples, if an attribute value evaluates to `MISSING`, the attribute is omitted entirely from the tuple rather than being included with a MISSING value.
+
+[[sec:ordered-vs-unordered-tuples]]
+==== Ordered vs. Unordered Tuples
+
+In the presence of type information, a tuple may be ordered. The semantics of ordered tuples and unordered tuples are equal, unless otherwise indicated. This allows for SQL-style access of a table's rows. as it pertains to positional access for the `GROUP BY` clause, discussed in <<sec:group-by-clause>>.
+
+Ordered tuples allow for the PartiQL compiler to validate type semantics of a PartiQL statement prior to execution. The extent of type validation is implementation specific. This is discussed in later chapters.
