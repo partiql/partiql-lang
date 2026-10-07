@@ -18,7 +18,7 @@ PartiQL there are no binding tuples (or any tuples at all for that
 matter) after a `SELECT VALUE` clause. <<#sec:order-by-and-setops>>
 elaborates on this aspect of PartiQL.
 
-. Unlike SQL, the input of an PartiQL query may also have order,
+. Unlike SQL, the input of a PartiQL query may also have order,
 because it is an array. The user may want to preserve the order of the
 input into the output. In this case, the `AT` structure in the `FROM`
 clause (recall, <<#sec:single-item-from>>) can capture the input order
@@ -118,7 +118,7 @@ expressions can refer directly to the attributes of those tuples.
 The complete scoping rules are as follows. When all of the following
 conditions are satisfied:
 
-. an PartiQL path expression ordering expression stem:[as] appears in
+. a PartiQL path expression ordering expression stem:[as] appears in
 the `ORDER BY` of a `UNION ... ORDER BY` query, where stem:[a] is an
 identifier and stem:[s] is the potentially empty suffix of the path.
 
