@@ -1,0 +1,48 @@
+[appendix]
+[[sec:appendix]]
+== Appendix
+
+[[sec:appendix-environments-examples]]
+=== Examples: Execution Modes
+
+[[sec:appendix-permissive-example]]
+==== Permissive Mode Example
+
+The following query illustrates the behavior of permissive mode when operating on heterogeneous data:
+
+[source,partiql]
+----
+SELECT VALUE {
+    'a': v.x,
+    'b': v.y * 2
+}
+FROM [
+    { 'x': 1, 'y': 2 },
+    { 'x': 3 },
+    { 'x': 5, 'y': 'foo' },
+    { 'y': 7 }
+] AS v
+----
+
+Results in:
+[source,partiql]
+----
+<<
+    { 'a': 1, 'b': 4 },
+    { 'a': 3 },
+    { 'a': 5 }
+>>
+----
+
+The following observations apply to the result:
+
+* The second tuple omits `b` because `v.y` is `MISSING`.
+* The third tuple omits `b` because `'foo' * 2` returns `MISSING` (type mismatch).
+
+[[sec:appendix-type-checking-example]]
+==== Type Checking Mode Example
+
+The same query from the permissive mode example (<<sec:appendix-permissive-example>>) would fail in type checking mode when processing the second and third tuples, as:
+
+* The second tuple lacks the `y` attribute.
+* The third tuple has a string `x` value where numeric operations are applied.
