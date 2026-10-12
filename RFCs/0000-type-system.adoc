@@ -1,0 +1,911 @@
+= PartiQL Type System
+John E. Quinn <johnedquinn@gmail.com>
+:description: Defining PartiQL's Types
+:url-repo: https://github.com/johnedquinn/partiql-lang
+:revdate: 2024-05-01
+:revnumber: 1
+:revremark: Defining PartiQL's Types
+:sectlinks:
+:sectanchors:
+:sectnums:
+:sectnumlevels: 4
+:toc: left
+:toclevels: 4
+:toc-title: Contents
+
+[preface]
+== Preface
+
+=== Overview
+
+This document aims to formalize the types that make up PartiQL's type system, the built-in functions that PartiQL implementations must implement, the relationships between types, and function resolution.
+
+To see the original RFC, please see link:https://github.com/partiql-lang/TODO[here].
+
+=== Motivation
+
+The PartiQL Team is currently working towards a long-term support (LTS) version (1.0) of PartiQL for the JVM implementation. As the type system defines the very foundation upon how functions, operators, and values operate, this document aims to formalize our type semantics before releasing version 1.0.
+
+=== Document Format
+
+The remainder of this document aims to write itself in a way that will enable the PartiQL Maintainers to copy and paste its contents directly into the PartiQL Specification. That being said, this document has intentionally chosen to deviate from PartiQL's RFC template.
+
+== PartiQL Data Types
+
+=== Inherited Types
+
+As PartiQL is an extension of SQL:1999, PartiQL inherits the following types and type families from SQL:1999:
+
+- Character String Types (CHARACTER, CHARACTER VARYING, and CHARACTER LARGE OBJECT)
+- Bit String Types (BIT, BIT VARYING)
+- Binary String Types (BINARY LARGE OBJECT)
+- Large Object String Types (CHARACTER LARGE OBJECT, BINARY LARGE OBJECT)
+- String Types (Character String Types, Bit String Types, Binary String Types)
+- Exact Numeric Types (NUMERIC, DECIMAL, INTEGER, SMALLINT)
+- Approximate Numeric Types (FLOAT, REAL, DOUBLE PRECISION)
+- Numeric Types (Exact Numeric Types, Approximate Numeric Types)
+- Time Types (TIME WITHOUT TIME ZONE, TIME WITH TIME ZONE)
+- Timestamp Types (TIMESTAMP WITHOUT TIME ZONE, TIMESTAMP WITH TIME ZONE)
+- Datetime Types (DATE, Time Types, Timestamp Types)
+- Interval Type (INTERVAL)
+- Boolean Type (BOOLEAN)
+
+=== PartiQL-Specific Types
+
+Beyond these pre-defined types established by SQL:1999, PartiQL proposes additional types categorized as follows:
+
+- The data types ARRAY, BAG, SEXP, and TUPLE are collectively referred to as complex types.
+- The data types ARRAY, SEXP, and BAG are collectively referred to as collection types.
+- The data type TUPLE is referred to as a tuple type.
+- The data types TINYINT, BIGINT, and UNBOUNDED INT are added to the definition of exact numeric types.
+- The data type SYMBOL is added to the definition of character string types.
+- The data type DYNAMIC is referred to as a dynamic type. There are no values that may be of the dynamic type.
+
+Subsequent sections in this RFC elaborate on the semantics of the above mentioned types.
+
+=== All Types (Enumerated)
+
+Below are the enumerated pre-defined PartiQL data types:
+
+[#data-types-table]
+.PartiQL Data Types
+[cols="3,3,1"]
+|===
+|PartiQL Data Type |Aliases |In SQL:1999
+
+|DYNAMIC
+|
+|N
+
+|NULL
+|
+|N
+
+|MISSING
+|
+|N
+
+|TUPLE
+|STRUCT
+|N
+
+|ARRAY
+|LIST
+|M
+
+|BAG
+|
+|N
+
+|CHARACTER
+|CHAR
+|Y
+
+|CHARACTER VARYING
+|VARCHAR, STRING
+|M
+
+|CHARACTER LARGE OBJECT
+|CLOB
+|M
+
+|BINARY LARGE OBJECT
+|BLOB
+|M
+
+|BIT
+|
+|Y
+
+|BIT VARYING
+|
+|Y
+
+|TINYINT
+|INT8, INTEGER8
+|N
+
+|SMALLINT
+|INT16, INTEGER16
+|M
+
+|INTEGER
+|INT, INTEGER32, INT32
+|M
+
+|BIGINT
+|INT64, INTEGER64
+|N
+
+|UNBOUNDED INT
+|
+|N
+
+|NUMERIC
+|DECIMAL, DEC
+|Y
+
+// TODO: Add annotation to talk about why this exists
+|UNBOUNDED NUMERIC
+|UNBOUNDED DECIMAL, UNBOUNDED DEC
+|N
+
+|REAL
+|
+|Y
+
+|DOUBLE PRECISION
+|
+|Y
+
+|FLOAT
+|
+|Y
+
+|TIME WITH TIME ZONE
+|
+|M
+
+|TIME WITHOUT TIME ZONE
+|
+|M
+
+|TIMESTAMP WITH TIME ZONE
+|
+|M
+
+|TIMESTAMP WITHOUT TIME ZONE
+|
+|M
+
+|DATE
+|
+|Y
+
+|INTERVAL
+|
+|Y
+|===
+
+Above, in <<data-types-table>>, the options Y, M, and N correpond to the words YES, MODIFIED, and NO, respectively. If the entry contains MODIFIED, further sections shall establish how the corresponding type differs from that of SQL:1999. Similarly, if the entry contains NO, further sections shall introduce the data type. If the entry contains YES, this document shall not elaborate on the corresponding type, and readers shall refer to SQL:1999 for information regarding its syntax and semantics.
+
+== Absent Values
+
+In contrast with SQL:1999, every data type includes two special values, the null and missing values. These are denoted
+by the keywords NULL and MISSING, respectively. These values differ from other values in the following respects:
+
+- Since the absent values are in every data type, the data type of the absent value implied by the
+keywords NULL/MISSING cannot be inferred; hence NULL/MISSING can be used to denote the null/missing value only in
+certain contexts, rather than everywhere that a literal is permitted.
+- Although the absent values are neither equal to any other value nor not equal to any other value —
+it is unknown whether or not it is equal to any given value — in some contexts, multiple absent
+values are treated together; for example, the <group by clause> treats all absent values together.
+
+=== The Null Value
+
+In PartiQL, the null value behaves the same as in SQL:1999.
+
+=== The Missing Value
+
+.EBNF
+[%nowrap]
+[source,ebnf]
+----
+(* Literal *)
+<missing literal> ::=
+    MISSING
+----
+
+While SQL:1999 defines the null value to be "a special value that is used to indicate the absence of any data value." (SQL:1999 Part 1 Section 3.1.1), in today's world, NULL has garnered a definition more akin to "a literal absent value, which itself is not absent". In today's world, several data formats allow for the explicit use of NULL to create data -- which may lead to confusion regarding whether the data is present or not. For example, consider the following snippet of JSON (or Ion):
+----
+{
+    "a": 1,
+    "b": 2,
+    "c": NULL
+}
+----
+
+If one were to ask "Is `data.c` absent?", what might one say? Yes, the value it is pointed to is absent, however, the path described exists in the underlying data. If one were to ask "Is `data.z` absent?", one would have greater confidence that, yes, attribute `z` is truly absent.
+
+Hence, the missing value represents latent typing errors (occurring as a result of an operation such as the above) that have been coerced to an absent value. In the above, `data.z` would have resulted in a typing error, however, in PartiQL's permissive mode, this would be coerced to the missing value. Other scenarios that could potentially result in a missing value include the mistyping of functions, mistyping of the FROM source, and more. For more information, see link:https://github.com/partiql-lang/TODO[RFC-TODO].
+
+In both typing modes (strict and permissive), it is possible to create a MISSING literal.
+
+.Example Usage
+[%nowrap]
+[source,partiql]
+----
+SELECT VALUE t
+FROM <<
+    1,
+    MISSING,
+    3
+>> AS t
+----
+
+For information about MISSING and its semantics, see link:https://github.com/partiql-lang/TODO[RFC-TODO].
+
+
+=== Implications of Typed Absent Values
+
+NOTE: This section shall not be copied and pasted into the PartiQL Specification. Its purpose is solely to provide additional information to readers of this RFC.
+
+[quote]
+____
+MISSING is not a type. It is a value.
+____
+
+Whether or not an argument evaluates to the missing value has *zero* effect on the function that is statically resolved. Since the missing value is *not* a type, it has no say in the function that shall be resolved. Therefore, in our implementation of the planner, we shall not model "missable" types to be the union of some theoretical "missing type" and another type. All types are "missable" as the missing value belongs to all types.
+
+=== Type of Absent Literals
+
+Regarding literal null values:
+
+[quote, SQL:1999 Part 1]
+____
+Since the null value is in every data type, the data type of the null value implied by the
+keyword NULL cannot be inferred; hence NULL can be used to denote the null value only in
+certain contexts, rather than everywhere that a literal is permitted.
+____
+
+For literal missing values (denoted by the keyword MISSING), PartiQL prescribes the same rules that SQL:1999 prescribes for the null value.
+
+NOTE: PostgreSQL describes the `unknown` data type which is a placeholder for literal NULL values prior to resolving functions/operations. PartiQL implementations may choose a similar approach.
+
+=== Replacing Existing Functionality
+
+TODO: Internally, we can wrap StaticType with a flag: isMissingValue & isNullValue. That way, we can still throw the "is always missing" warning.
+
+TODO
+
+== Dynamic Type
+
+==========
+*Name*: DYNAMIC +
+*Aliases*: <None> +
+*In SQL:1999*: NO
+==========
+
+When the PartiQL compiler does not have enough information to infer a value's type, it uses the dynamic type.
+
+[quote, Dart Programming Language]
+____
+Dynamic ... indicates that you want to disable static checking.
+____
+
+Note that the dynamic type is not a runtime type. It is solely used during compilation to defer type-checking until the runtime. That being said, the dynamic type plays a unique role in function resolution. The consequence of using the dynamic type in operations and functions is described in more detail in link:https://github.com/partiql-lang/TODO[RFC-TODO].
+
+During PartiQL's static type analysis, interactions with the dynamic type _almost_ always lead to propagation of the dynamic type. For example, consider the following operation:
+
+[source, partiql]
+----
+-- Assume a is DYNAMIC, b is INT
+a + b -- The resulting compile-time type would be DYNAMIC
+----
+
+.EBNF
+[source,ebnf]
+----
+(* Type *)
+<dynamic type> ::=
+    DYNAMIC
+----
+
+.Example Usage
+[source,partiql]
+----
+-- Below, a person might have expressed their address as just a zip-code (string), ...
+-- ... or a struct containing fields such as "city", "street", etc.
+CREATE TABLE Person (
+    ssn STRING NOT NULL,
+    age INT,
+    name STRING,
+    address DYNAMIC
+);
+----
+
+== Character Strings
+
+=== Character Varying Type
+
+==========
+*Name*: CHARACTER VARYING +
+*Aliases*: VARCHAR, STRING +
+*In SQL:1999*: MODIFIED
+==========
+
+XX
+
+=== Symbol Type
+
+==========
+*Name*: SYMBOL +
+*Aliases*: <None> +
+*In SQL:1999*: NO
+==========
+
+PartiQL supports the SYMBOL type, which has the same semantics as CHARACTER VARYING.
+
+.EBNF
+[source,ebnf]
+----
+(* Type *)
+<symbol type> ::=
+    SYMBOL
+
+(* Literals *)
+<symbol literal> ::=
+    SYMBOL <string literal>
+----
+
+TIP: As a historical aside, the symbol type exists primarily for compatibility with Ion, which has the symbol type. By allowing for the SYMBOL type, PartiQL users have the ability to manipulate symbols using common operations such as concatenation and substring. For more information, see link:https://github.com/partiql-lang/TODO[RFC-TODO].
+
+== Large Object Strings
+
+The Large Object String types of CHARACTER LARGE OBJECT and BINARY LARGE OBJECT remain largely the same as in SQL:1999, however, their size limitations are removed in PartiQL.
+
+.EBNF
+[source,ebnf]
+----
+(* Literals *)
+<character large object type> ::=
+    CHARACTER LARGE OBJECT [ <left paren> <large object length> <right paren> ]
+    | CHAR LARGE OBJECT [ <left paren> <large object length> <right paren> ]
+    | CLOB [ <left paren> <large object length> <right paren> ]
+
+<binary large object type> ::=
+    BINARY LARGE OBJECT [ <left paren> <large object length> <right paren> ]
+    | BLOB [ <left paren> <large object length> <right paren> ]
+----
+
+If <large object length> is not specified, then UNCONSTRAINED is assumed. With this in place, PartiQL shall allow for variable unlimited length large object strings (up to implementation limits).
+
+TIP: As a historical aside, the unconstrained aspect of large object strings exists primarily for compatibility with Ion.
+
+== Numbers
+
+=== Exact Numeric Types
+
+.EBNF
+[source,ebnf]
+----
+(* Literals *)
+<exact numeric literal> ::=
+    <unsigned integer> [ <period> [ <unsigned integer> ] ]
+    | <period> <unsigned integer>
+----
+
+From SQL:
+[quote, SQL:1999]
+____
+The declared type of an <exact numeric literal> is exact numeric. The precision of an <exact
+numeric literal> is the number of <digit>s that it contains. The scale of an <exact numeric
+literal> is the number of <digit>s to the right of the <period>.
+____
+
+==== Tiny Integer Type
+
+==========
+*Name*: TINYINT +
+*Aliases*: INT8 +
+*In SQL:1999*: NO +
+*Binary Precision*: 8
+==========
+
+The TINYINT type is a signed integer represented in 8 bits (1 byte).
+
+==== Small Integer Type
+
+==========
+*Name*: SMALLINT +
+*Aliases*: INT16 +
+*In SQL:1999*: MODIFIED +
+*Binary Precision*: 16
+==========
+
+In contrast to SQL:1999, PartiQL prescribes a specific binary precision to an SMALLINT. It is a signed integer represented in 16 bits (2 bytes).
+
+==== Integer Type
+
+==========
+*Name*: INTEGER +
+*Aliases*: INT, INT32 +
+*In SQL:1999*: MODIFIED +
+*Binary Precision*: 32
+==========
+
+In contrast to SQL:1999, PartiQL prescribes a specific binary precision to an INTEGER. It is a signed integer represented in 32 bits (4 bytes).
+
+==== Big Integer Type
+
+==========
+*Name*: BIGINT +
+*Aliases*: LONG, INT64 +
+*In SQL:1999*: NO +
+*Binary Precision*: 64
+==========
+
+The BIGINT type is a signed integer represented in 64 bits (8 bytes).
+
+==== Numeric Type
+
+==========
+*Name*: NUMERIC +
+*Aliases*: DECIMAL, DEC +
+*In SQL:1999*: MODIFIED
+==========
+
+The NUMERIC data type is largely the same as in SQL:1999, however, its allowable bounds for decimal precision and scale have been modified.
+
+.Numeric Parameters
+[cols="1,1,3"]
+|===
+|Parameter |Type |Range
+
+|precision
+|int
+|- (1, MFP], where MFP is the implementation-defined maximum finite decimal precision for the NUMERIC type. +
+- UNBOUNDED, otherwise known as MP, the maximum precision for the NUMERIC type.
+
+|scale
+|int
+|- [0, precision], when precision in (1, MFP]. +
+- 0 OR UNBOUNDED, when precision is UNBOUNDED.
+|===
+
+.EBNF
+[source,ebnf]
+----
+(* Type *)
+<numeric type> ::= (* In SQL:1999, this would be <exact numeric type> *)
+    NUMERIC [ <left paren> <numeric precision> [ <comma> <numeric scale> ] <right paren> ]
+    | DECIMAL [ <left paren> <numeric precision> [ <comma> <numeric scale> ] <right paren> ]
+    | DEC [ <left paren> <numeric precision> [ <comma> <numeric scale> ] <right paren> ]
+
+<numeric precision> ::=
+    <precision> (* Derived from SQL:1999 *)
+    | UNCONSTRAINED
+
+<numeric scale> ::=
+    <scale> (* Derived from SQL:1999 *)
+    | UNCONSTRAINED
+----
+
+The current recommendation is for users to specify both <numeric precision> and <numeric scale>.
+
+When <numeric precision> and <numeric scale> are not specified, this creates an "unconstrained" numeric in which numeric values of any length can be stored, up to the implementation limits. A column of this kind will not coerce input values to any particular scale, whereas numeric columns with a declared scale will coerce input values to that scale.
+
+[source, partiql]
+----
+NUMERIC(5, 2) -- Specifies a numeric of precision 5 and scale 2
+
+NUMERIC(10, UNCONSTRAINED) -- Specifies a numeric of precision 5 and unconstrained scale
+
+NUMERIC(UNCONSTRAINED, 0) -- Specifies a numeric of unconstrained precision and scale 0
+----
+
+If <numeric precision> is specified but <numeric scale> is absent, then <numeric scale> is assumed to be 0:
+
+[source, partiql]
+----
+-- The two below are equivalent
+NUMERIC(UNCONSTRAINED, 0)
+NUMERIC(UNCONSTRAINED)
+
+-- The two below are equivalent
+NUMERIC(5, 0)
+NUMERIC(5)
+----
+
+If both <numeric precision> and <numeric scale> are absent, a precision of UNCONSTRAINED and a scale of UNCONSTRAINED are assumed:
+
+[source, partiql]
+----
+-- The two below are equivalent
+NUMERIC
+NUMERIC(UNCONSTRAINED, UNCONSTRAINED)
+----
+
+.Example Usage
+[source,partiql]
+----
+-- Example for using an unbounded "integer" (synonymous with Ion's integer)
+CREATE TABLE orders (
+    order_id NUMERIC(UNCONSTRAINED, 0),
+    item_id NUMERIC(UNCONSTRAINED), -- Equivalent to the above line
+    quantity SMALLINT,
+    orderee_id NUMERIC(15, 0)
+);
+
+-- Example for using an unbounded decimal (synonymous with Ion's decimal)
+CREATE TABLE planetary_coordinates (
+    x NUMERIC(UNCONSTRAINED, UNCONSTRAINED),
+    y NUMERIC(UNCONSTRAINED, UNCONSTRAINED),
+    z NUMERIC -- this column has the same type as the above two lines
+);
+----
+
+TIP: As a historical aside, the unconstrained numeric types exist primarily for compatibility with Ion, which has support for arbitrary precision decimals and integers.
+
+== Datetime Types
+
+The datetime types of TIME WITH TIME ZONE, TIME WITHOUT TIME ZONE, TIMESTAMP WITH TIME ZONE, and TIMESTAMP WITHOUT TIME ZONE data types are largely the same as in SQL:1999, however, their allowable bounds for precision have been modified.
+
+.EBNF
+[source,ebnf]
+----
+<datetime type> ::=
+    DATE
+    | TIME [ <left paren> <partiql time precision> <right paren> ]
+        [ <with or without time zone> ]
+    | TIMESTAMP [ <left paren> <timestamp precision> <right paren> ]
+        [ <with or without time zone> ]
+
+<with or without time zone> ::=
+    WITH TIME ZONE
+    | WITHOUT TIME ZONE
+
+<partiql time precision> ::=
+    <time precision> (* from SQL:1999 *)
+    | UNCONSTRAINED
+
+<partiql timestamp precision> ::=
+    <timestamp precision> (* from SQL:1999 *)
+    | UNCONSTRAINED
+
+<time precision> ::= <time fractional seconds precision>
+
+<timestamp precision> ::= <time fractional seconds precision>
+
+<time fractional seconds precision> ::= <unsigned integer>
+----
+
+Dissimilar to SQL:1999, TIME and TIMESTAMP types are able to specify an unconstrained precision to allow for Ion timestamps. When <partiql time precision> is not specified, this creates an "unconstrained" time or timestamp in which fractional seconds of any length can be stored, up to the implementation limits.
+
+If <partiql time precision> is absent, a precision of UNCONSTRAINED is assumed. If <partiql timestamp precision> is absent, a precision of UNCONSTRAINED is assumed. For example:
+
+[source, partiql]
+----
+-- The two below are equivalent
+TIME WITH TIME ZONE
+TIME(UNCONSTRAINED) WITH TIME ZONE
+
+-- The two below are equivalent
+TIMESTAMP WITH TIME ZONE
+TIMESTAMP(UNCONSTRAINED) WITH TIME ZONE
+----
+
+.Example Datetime Usage
+[source,partiql]
+----
+-- Example for using a standard time and timestamp
+CREATE TABLE daily_events (
+    event_id BIGINT,
+    event_time TIME(5) WITH TIME ZONE,
+    created_timestamp TIMESTAMP(5) WITH TIME ZONE
+);
+
+-- Example for using an unconstrained time/timestamp
+CREATE TABLE solar_eclipses (
+    event_id BIGINT,
+    event_timestamp TIMESTAMP(UNCONSTRAINED) WITH TIME ZONE,
+    event_timestamp_simple TIMESTAMP WITH TIME ZONE, -- equivalent with line above
+    daily_sync_time TIME WITH TIME ZONE -- unconstrained time
+);
+----
+
+== Interval Type
+
+==========
+*Name*: INTERVAL +
+*Aliases*: <None> +
+*In SQL:1999*: MODIFIED
+==========
+
+The INTERVAL data type is largely the same as in SQL:1999, however, its allowable bounds for fractional seconds precision (decimal) has been modified.
+
+.EBNF
+[%nowrap]
+[source,ebnf]
+----
+<interval qualifier> ::=
+    <start field> TO <end field>
+    | <single datetime field>
+
+<start field> ::=
+    <non-second primary datetime field> [ <left paren> <interval leading field precision> <right paren> ]
+
+<end field> ::=
+    <non-second primary datetime field>
+    | SECOND [ <left paren> <interval fractional seconds precision> <right paren> ]
+
+<single datetime field> ::=
+    <non-second primary datetime field> [ <left paren> <interval leading field precision> <right paren> ]
+    | SECOND [ <left paren> <interval leading field precision> [ <comma> <interval fractional seconds precision> ] <right paren> ]
+
+<primary datetime field> ::=
+    <non-second primary datetime field>
+    | SECOND
+
+<non-second primary datetime field> ::= YEAR | MONTH | DAY | HOUR | MINUTE
+
+<interval fractional seconds precision> ::=
+    <interval fractional seconds precision constrained>
+    | UNCONSTRAINED
+
+<interval fractional seconds precision constrained> ::= <unsigned integer>
+
+<interval leading field precision> ::= <unsigned integer>
+----
+
+In the case where <interval fractional seconds precision> is defined and is not UNCONSTRAINED, it shall be greater than or equal to 0 (zero) and shall not be greater than the implementation-defined maximum. The maximum value of <interval fractional seconds precision constrained> is implementation-defined, but shall not be less than 6.
+
+In the case where either i) <interval fractional seconds precision> is absent and SECOND is specified, or ii) <interval fractional seconds precision> is specified to be UNCONSTRAINED, then there shall be no explicit bound on fractional seconds precision.
+
+NOTE: This is in contrast to SQL:1999 which states: "If SECOND is specified and <interval fractional seconds precision> is not specified, then an <interval fractional seconds precision> of 6 is implicit."
+
+== Collection Types
+
+A collection is a composite value comprising zero or more elements each a value of some data type, DT. For all collection types, DT may be the DYNAMIC type -- allowing for collections of heterogeneous types.
+
+=== Bag Type
+
+==========
+*Name*: BAG +
+*Aliases*: <None> +
+*In SQL:1999*: NO
+==========
+
+A BAG is an unordered collection of values able to contain duplicates. As such, operations such as indexing shall not be allowed. More information on the usage and semantics of bags is described in detail in the link:https://github.com/partiql-lang/TODO[PartiQL Specification] as well as link:https://github.com/partiql-lang/TODO[RFC-TODO].
+
+.EBNF
+[%nowrap]
+[source,ebnf]
+----
+(* Type *)
+<bag type> ::=
+    [ <data type> ] BAG
+
+(* Literal *)
+<bag value> ::=
+    <bag value prefix> [ <bag element> [ { <comma> <bag element> }... ] ] <bag value postfix>
+
+<bag value prefix> ::= <<
+
+<bag value postfix> ::= >>
+----
+
+If <data type> is unspecified, DYNAMIC is assumed to be the DT of the bag.
+
+NOTE: SQL:1999 has allowed for the specification of an ARRAY's size via styntax such as: `INT ARRAY[10]`. This RFC has not found a need to specify a constraint such as length. Therefore, one can assume that the length is unconstrained.
+
+.Example Usage
+[%nowrap]
+[source,partiql]
+----
+-- Creating a table of users
+CREATE TABLE users (
+    user_id BIGINT,
+    user_name STRING(30),
+    favorite_foods VARCHAR(30) BAG,
+    recent_purchases DYNAMIC BAG,
+    recent_purchases_simple BAG -- equivalent to the above line
+);
+
+-- Creating a literal bag where DT is DYNAMIC
+<<
+    'this is the 0th element',
+    1,
+    'this is the 2nd element'
+>>;
+
+-- Querying against a literal bag where DT is TUPLE
+SELECT VALUE t.a
+FROM <<
+    { 'a': 1 },
+    { 'a': 2 }
+>> AS t;
+----
+
+=== Array Type
+
+==========
+*Name*: ARRAY +
+*Aliases*: LIST +
+*In SQL:1999*: MODIFIED
+==========
+
+The ARRAY data type is largely the same as in SQL:1999, however, its allowable types now include all types discussed in this RFC (including the DYNAMIC type).
+
+.EBNF
+[%nowrap]
+[source,ebnf]
+----
+(* Type *)
+<array type> ::=
+    [ <data type> ] ARRAY
+
+(* Literal *)
+<array literal> ::=
+    <array literal prefix> [ <array element> [ { <comma> <array element> }... ] ] <array literal postfix>
+
+<array literal prefix> ::= [
+
+<array literal postfix> ::= ]
+----
+
+If <data type> is unspecified, DYNAMIC is assumed to be the DT of the array.
+
+NOTE: SQL:1999 has allowed for the specification of an ARRAY's size via styntax such as: `INT ARRAY[10]`. This RFC has not found a need to specify a constraint such as length. Therefore, one can assume that the length is unconstrained.
+
+.Example Usage
+[%nowrap]
+[source,partiql]
+----
+-- Creating a table of users
+CREATE TABLE users (
+    user_id BIGINT,
+    user_name STRING(30),
+    favorite_foods_in_order_of_favoritism VARCHAR(30) ARRAY,
+    recent_purchases_in_order DYNAMIC ARRAY,
+    recent_purchases_in_order_simple ARRAY -- equivalent to the above line
+);
+
+-- Creating a literal array where DT is DYNAMIC
+[
+    'this is the 0th element',
+    1,
+    'this is the 2nd element'
+];
+
+-- Querying against a literal array where DT is TUPLE
+SELECT VALUE t.a
+FROM [
+    { 'a': 1 },
+    { 'a': 2 }
+ ] AS t;
+----
+
+== Tuple Type
+
+==========
+*Name*: TUPLE +
+*Aliases*: STRUCT +
+*In SQL:1999*: NO
+==========
+
+== Other Types
+
+PartiQL supports all other pre-defined types specified in SQL:1999, including:
+- BOOLEAN
+- BIT
+- BIT VARYING
+- DATE
+
+For information regarding their semantics, please see SQL:1999 and link:https://github.com/partiql-lang/TODO[RFC-TODO].
+
+== Type Conversions
+
+=== Type Relationships
+
+The relationships between types follows a pattern similar to SQL:1999. That is, they are defined by a set of casts that aid in determining which functions are invoked, what is inserted into the database environment, and more. Below are defined the set of casts applicable to each of PartiQL's predefined data types:
+
+=== Implicit Conversions
+
+TODO
+
+=== Explicit Conversions
+
+TODO
+
+== Type Precedence
+
+TODO
+
+== Related Ongoing Work
+
+The topics of type precedence, function resolution, implicit coercions, and explict conversions are covered in link:https://github.com/partiql-lang/TODO[RFC-TODO].
+
+== Future Work
+
+The topics of user-defined types shall be covered in future RFCs.
+
+== Appendix
+
+.Acronym Table (Quick Reference)
+[cols="1,1"]
+|===
+|Acronym |Definition
+
+|MFP
+|Maximum Finite Precision of Numeric Data Type. This is largely used for function signature generation.
+
+|MP
+| Maximum Precision of Numeric Data Type.
+
+|===
+.SQL:1999 Pre-Defined Data Types
+****
+[cols="1,1"]
+|===
+|Type Family |Exact SQL:1999 Type
+
+.3+|Character String Types
+|CHARACTER (length)
+
+|CHARACTER VARYING (length)
+
+|CHARACTER LARGE OBJECT (large object length)
+
+|Binary String Types
+|BINARY LARGE OBJECT (large object length)
+
+.2+|Bit String Types
+|BIT (length)
+
+|BIT VARYING (length)
+
+.2+|Large Object String Types
+|CHARACTER LARGE OBJECT (large object length)
+
+|BINARY LARGE OBJECT (large object length)
+
+.4+|Exact Numeric Types
+|SMALLINT
+
+|INTEGER
+
+|NUMERIC (precision, scale)
+
+|DECIMAL (precision, scale)
+
+.3+|Approximate Numeric Types
+|REAL
+
+|DOUBLE PRECISION
+
+|FLOAT (precision)
+
+.2+|Time Types
+|TIME WITH TIME ZONE (time precision)
+
+|TIME WITHOUT TIME ZONE (time precision)
+
+.2+|Timestamp Types
+|TIMESTAMP WITH TIME ZONE (timestamp precision)
+
+|TIMESTAMP WITHOUT TIME ZONE (timestamp precision)
+
+|Date Types
+|DATE
+
+|Interval Types
+|INTERVAL (precision)
+|===
+****
+
+== END
+
+=== Open Questions
+
+- What should be the naming of `UNBOUNDED INT`, `UNBOUNDED NUMERIC`, `UNBOUNDED TIMESTAMP`? Maybe: `ARBITRARY PRECISION INT`, `ARBITRARY PRECISION NUMERIC`, `ARBITRARY PRECISION TIMESTAMP`?
