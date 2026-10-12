@@ -1,0 +1,521 @@
+= PartiQL Functions
+John E. Quinn <johnedquinn@gmail.com>
+:description: Defining PartiQL's Functions
+:url-repo: https://github.com/johnedquinn/partiql-lang
+:revdate: 2024-05-01
+:revnumber: 1
+:revremark: Defining PartiQL's Functions
+:sectlinks:
+:sectanchors:
+:sectnums:
+:sectnumlevels: 5
+:toc: left
+:toclevels: 4
+:toc-title: Contents
+
+:static-function: Static Function
+:dynamic-function: Dynamic Function
+:attr-static-function-call: Resolved Static Function
+:attr-dynamic-function-call: Resolved Dynamic Function
+:attr-value-function: Value Function
+
+[preface]
+== Preface
+
+=== Overview
+
+This document aims to formalize PartiQL's rules for function resolution, the built-in functions, coercion rules, and behavior of NULL/MISSING. This document can be seen as a follow-up to link:https://github.com/partiql-lang/TODO[RFC-TODO] (_Defining PartiQL's Types_).
+
+To see the original RFC, please see link:https://github.com/partiql-lang/TODO[here].
+
+=== Motivation
+
+The PartiQL Team is currently working towards a long-term support (LTS) version (1.0) of PartiQL for the JVM implementation. As the type system defines the very foundation upon how functions, operators, and values operate, this document aims to formalize our type semantics before releasing version 1.0.
+
+=== Document Format
+
+The remainder of this document aims to write itself in a way that will enable the PartiQL Maintainers to copy and paste its contents directly into the PartiQL Specification. That being said, this document has intentionally chosen to deviate from PartiQL's RFC template.
+
+== Value Functions
+
+PartiQL... TODO
+
+In prior specifications (see SQL:1999), {attr-value-function}s have been commonly known as Scalar Functions. This specification has decided to use the term {attr-value-function} to demonstrate that _any_ type (whether it be a scalar, tuple, or collection type) may describe the parameter of any {attr-value-function}.
+
+TODO: Talk about how function signatures can hold all types except for MISSING. System-defined functions, however, may allow MISSING as a function parameter (see <<op-equals>>, <<is-type-predicate>>, and <<logical-ops>> for example).
+TODO: Talk about function parameters.
+TODO: Dynamic may be used.
+
+The remainder of this document is solely dedicated to Value Functions.
+
+=== Static vs Dynamic Value Functions
+
+PartiQL supports *{static-function}s* and *{dynamic-function}s*, defined as follows:
+
+- A *{attr-static-function-call}* is a singular {attr-value-function} that is the result of a function invocation that has been statically resolved. During execution, the function is immediately invoked without much preparation.
+- A *{attr-dynamic-function-call}* is a set of applicable {attr-value-function}s that are the result of a function invocation that has been statically resolved. During execution, further comparisons must be made against the argument types and parameter types before invocation.
+
+NOTE: It may seem counterintuitive that a "dynamic" function be statically resolved (i.e. resolved at compile time). However, for the purpose of optimization and portability, the knowledge of applicable functions is required during compilation.
+
+== Function Resolution
+
+{attr-value-function}s may be statically or dynamically invoked, though, as PartiQL is a gradually typed system, the PartiQL compiler attempts to statically resolve a function as much as possible. In order to do so, the following algorithm describes PartiQL's mechanism for function resolution:
+
+1. Given a Function Invocation (FI), the PartiQL compiler shall gather a set of Potential Functions (PFs): If a non-schema-qualified function name was used, the functions considered are those with the matching name and argument count that are visible in the current search path. If a qualified function name was given, only functions in the specified schema are considered.
+    a. If the search path finds multiple functions of identical argument types, only the one appearing earliest in the path is considered. Functions of different argument types are considered on an equal footing regardless of search path position.
+2. The PartiQL compiler shall attempt to statically resolve a FI to a single value function by leveraging the Static Function Resolution algorithm and the gathered PF.
+    a. If a match is found, return the match. The match shall be referred to as a *{attr-static-function-call}*.
+    b. If a match is not found, continue to the next step.
+3. The PartiQL compiler, at compile-time, shall attempt to resolve a FI to an ordered list of value functions by leveraging the Dyanmic Function Resolution algorithm and the gathered PF.
+    a. If results are produced, this shall be the set of functions that the runtime shall use for dynamic invocation. This set shall be referred to as a *{attr-dynamic-function-call}*.
+    b. If no results are produced, the compilation shall fail, regardless of typing mode.
+
+For examples of function resolution, please see <<func-resolution-examples>>.
+
+=== Static Function Resolution
+
+Given a set of Potential Functions:
+
+1. Check for a function accepting exactly the input argument types. If one exists (there can be only one exact match in the set of functions considered), use it.
+2. Return the Best Match (BM): Execute the Best Match Algorithm.
+
+==== Best Match Algorithm
+
+Given a set of Potential Functions, the Best Match Algorithm is as follows:
+
+1. Discard candidate functions for which the input types do not match and cannot be converted (using an implicit conversion) to match. If only one candidate remains, use it; else continue to the next step.
+2. . TODO
+
+=== Dynamic Function Resolution
+
+Given a set of Potential Functions (PFs) and a Function Invocation (FI):
+
+1. Check that the FI contains an argument whose type is DYNAMIC. If no arguments are of the DYNAMIC type, return an empty set.
+2. Return the Potential Functions.
+
+== Function Invocation
+
+Prior to executing a Static Call or Dynamic Call, all arguments shall be evaluated in an implementation-defined manner. The resulting values shall be referred to as Evaluated Arguments (EAs).
+
+[#static-call-invocation]
+=== Static Call Invocation
+
+As all of the typing has been done ahead of time, there is minimal overhead to the invocation of a function. Given that the EAs have been provided, the invocation procedure is as follows:
+
+1. *Missing Handling*: If the function to be invoked is a MISSING CALL and any of the arguments in EA are the MISSING value, return MISSING.
+2. *Null Handling*: If the function to be invoked is a NULL CALL and any of the arguments in EA are the NULL value, return NULL.
+3. *Function Invocation*: Pass the arguments in EA to the function and return its result.
+
+[#dynamic-call-invocation]
+=== Dynamic Call Invocation
+
+In contrast to the <<static-call-invocation>>, analysis of the runtime types is necessary before invocation of a function. Given that the EAs have been provided, the invocation procedure is as follows:
+
+1. *Function Resolution*: Using the evaluated arguments' runtime types, use the Best Match Algorithm to choose the function to invoke. If a function has been resolved: 
+    a. Coerce any arguments if necessary to create a new EA.
+    b. Execute the procedure defined in <<static-call-invocation>> to execute the function using the new EA.
+2. *Resolution Failure*: If a function implementation has not been resolved, then:
+    a. In permissive mode, return MISSING.
+    b. In strict mode, fail the evaluation.
+
+== System-Defined Operators
+
+For all of the below operators, this specification shall express its semantics using an unofficial syntax that is similar to that of SQL:1999's CREATE FUNCTION. This RFC is _not_ proposing its adoption -- it is merely a way to express semantics in an easy-to-understand fashion.
+
+Readers of this specification will take note of: `CALLED ON MISSING INPUT`. To be clear, PartiQL users may _not_ use this clause in user-defined functions. This clause is only to show how some system-wide operators may handle the missing value as an argument.
+
+=== Monadic (Prefix) Operators
+
+TODO
+
+==== Plus
+
+[subs=+quotes]
+[source,partiql-unofficial]
+----
+CREATE MONADIC OPERATOR "+" (
+    rhs __T__
+) RETURNS __T__
+RETURNS NULL ON NULL INPUT
+SPECIFIC "OP-PLUS---__T__---__T__"
+RETURN +rhs;
+----
+
+In the above signature, _T_ shall be replaced with all numeric types.
+
+==== Minus
+
+[subs=+quotes]
+[source,partiql-unofficial]
+----
+CREATE MONADIC OPERATOR "-" (
+    rhs __T__
+) RETURNS __T__
+RETURNS NULL ON NULL INPUT
+SPECIFIC "OP-MINUS---__T__---__T__"
+RETURN -rhs;
+----
+
+In the above signature, _T_ shall be replaced with all numeric types.
+
+=== Diadic (Infix) Operators
+
+==== Plus
+
+[subs=+quotes]
+[source,partiql-unofficial]
+----
+CREATE DIADIC OPERATOR "+" (
+    lhs __T__,
+    rhs __T__
+) RETURNS __T__ -- TODO: Return type
+RETURNS NULL ON NULL INPUT
+SPECIFIC "OP-PLUS---__T__--__T__---__T__"
+RETURN lhs + rhs;
+----
+
+In the above signature, _T_ shall be replaced with all numeric types.
+
+==== Minus
+
+[subs=+quotes]
+[source,partiql-unofficial]
+----
+CREATE DIADIC OPERATOR "-" (
+    lhs __T__,
+    rhs __T__
+) RETURNS __T__ -- TODO: Return type
+RETURNS NULL ON NULL INPUT
+SPECIFIC "OP-MINUS---__T__--__T__---__T__"
+RETURN lhs - rhs;
+----
+
+In the above signature, _T_ shall be replaced with all numeric types.
+
+==== Multiplication
+
+[subs=+quotes]
+[source,partiql-unofficial]
+----
+CREATE DIADIC OPERATOR "*" (
+    lhs __T__,
+    rhs __T__
+) RETURNS __T__ -- TODO: Return type
+RETURNS NULL ON NULL INPUT
+SPECIFIC "OP-TIMES---__T__--__T__---__T__"
+RETURN lhs * rhs;
+----
+
+In the above signature, _T_ shall be replaced with all numeric types.
+
+==== Division
+
+[subs=+quotes]
+[source,partiql-unofficial]
+----
+CREATE DIADIC OPERATOR "/" (
+    lhs __T__,
+    rhs __T__
+) RETURNS __T__ -- TODO: Return type
+RETURNS NULL ON NULL INPUT
+SPECIFIC "OP-DIVIDE---__T__--__T__---__T__"
+RETURN lhs / rhs;
+----
+
+In the above signature, _T_ shall be replaced with all numeric types.
+
+==== Concatenation
+
+[subs=+quotes]
+[source,partiql-unofficial]
+----
+CREATE DIADIC OPERATOR "||" (
+    lhs __T__,
+    rhs __T__
+) RETURNS __T__ -- TODO: Return type
+RETURNS NULL ON NULL INPUT
+SPECIFIC "OP-CONCAT---__T__--__T__---__T__"
+RETURN lhs || rhs;
+----
+
+// TODO: How about bit strings?
+In the above signature, _T_ shall be replaced with all string types, collection types, and tuple types.
+
+[#logical-ops]
+==== Logical Operators (AND, OR, NOT)
+
+[subs=+quotes]
+[source,partiql-unofficial]
+----
+CREATE DIADIC OPERATOR "__P__" (
+    lhs __T__,
+    rhs __S__
+) RETURNS BOOLEAN
+CALLED ON NULL INPUT
+CALLED ON MISSING INPUT
+SPECIFIC "OP-__P__---__T__--__S__---BOOLEAN"
+RETURN lhs __P__ rhs;
+----
+
+In the above signature, _T_ and _S_ shall be replaced with the cartesian product of < MISSING > and < BOOLEAN >. __P__ shall be replaced by all of: AND, OR, and NOT.
+
+The logical operators of AND, OR, and NOT are modelled in this manner to allow for TODO.
+
+==== Equals Operator
+
+[subs=+quotes]
+[source,partiql-unofficial]
+----
+CREATE DIADIC OPERATOR "=" (
+    lhs DYNAMIC,
+    rhs DYNAMIC
+) RETURNS BOOLEAN
+RETURNS NULL ON NULL INPUT
+CALLED ON MISSING INPUT
+SPECIFIC "OP-EQUALS---DYNAMIC--DYNAMIC---BOOLEAN"
+RETURN lhs = rhs;
+----
+
+== System-Defined Predicates
+
+TODO
+
+== Built-In Functions
+
+XX
+
+== Future Work
+
+Future RFCs shall clarify aggregation functions.
+
+[#func-resolution-examples]
+[appendix]
+== Function Resolution Examples
+
+TODO
+
+[appendix]
+== END!!!!!!!!!!
+
+[appendix]
+== Function Resolution SQL:1999 Simple
+
+The method of resolving statically invoked functions is as follows:
+
+1. Function Path (FP): The FP shall be the SQL-Path of the current SQL-Session.
+2. Possible Candidate Routines (PCR):
+    a. If the function identifier is not schema-qualified: Determine the PCR by gathering all routines from the FP whose identifiers match that of the requested routine identifier. If none are found, throw an error.
+    b. If the function identifier is schema-qualified: Determine the PCR by gathering all routines from the database environment whose identifiers match that of the requested routine identifier. If none are found, throw an error.
+3. Executable Routines (ER): Filter through the PCR and eliminate all routines in which the current user does not have the authorization to EXECUTE the routine. If none remain, throw an error.
+4. Invocable Routines: (IR): Filter through the ER and eliminate all routines in which the number of requested arguments does not match the number of its parameters. Simultaneously eliminate all routines in which any argument is not implicitly coercible to the corresponding parameter's type. If none remain, throw an error.
+5. Candidate Routines (CR):
+    a. If the requested routine identifier is not schema-qualified, then the CR shall be comprised of all routines in IR.
+    b. If the requested routine identifier is schema-qualified, then the CR shall be comprised of all routines in IR that originate from the corresponding schema in the FP.
+6. Candidate Subject Routines (CSR): Apply the Subject Routine Determination to the CR to yield CSR.
+7. Subject Routine (SR):
+    a. If the requested identifier is schema qualified, CSR shall be comprised of only one routine. That is the SR. Return.
+    b. If the requested identifer is not schema qualified, the SR is the routine in the CSR that is highest in precedence according to the FP.
+
+Function Definitions:
+
+[appendix]
+== Coercions (Personal Notes)
+
+[quote, SQL:1999]
+____
+assignable: The characteristic of a data type that permits a value of that data type to be
+assigned to a site of a specified data type. See Subclause 4.12, ‘Type conversions and mixing of
+data types’.
+
+Values of the data types NUMERIC, DECIMAL, INTEGER, SMALLINT, FLOAT, REAL, and
+DOUBLE PRECISION are numbers and are all mutually comparable and mutually assignable. If
+an assignment would result in a loss of the most significant digits, an exception condition is raised.
+____
+
+[appendix]
+== Function Resolution (Personal Notes)
+
+In traditional SQL, any value's type is always statically known. How does function resolution typically happen then? Here's how:
+
+[quote]
+____
+An SQL-invoked function that is not an SQL-invoked method is an SQL-invoked regular function.
+An SQL-invoked regular function is specified by <function specification> (see Subclause 11.49,
+‘‘<SQL-invoked routine>’’).
+
+Different SQL-invoked routines can have equivalent <routine name>s. No two SQL-invoked func-
+tions in the same schema are allowed to have the same signature. No two SQL-invoked procedures
+in the same schema are allowed to have the same name and the same number of parameters.
+Subject routine determination is the process for choosing the subject routine for a given <routine
+invocation> given a <routine name> and an <SQL argument list>. Subject routine determination
+for SQL-invoked functions considers the most specific types of all of the arguments to the invocation
+of the SQL-invoked function in order from left to right. Where there is not an exact match between
+the most specific types of the arguments and the declared types of the parameters, type precedence
+lists are used to determine the closest match. See Subclause 9.4, ‘‘Subject routine determination’’.
+____
+
+[quote, SQL:1999 Section 9.4]
+____
+SR = Set of SQL-invoked routines (unordered). n = Size. R~i~ is the ith SR.
+
+AL = argument list. m = Size. A~j~ = jth AL.
+
+SDTA~j~ = declared type of A~j~.
+
+SDTP~i,j~ = type designator of the j-th SQL parameter in R~i~.
+
+// Eliminate SR's.
+For r varying from 1 (one) to m, if there is more than one SQL-invoked routine in SR, then for
+each pair of SQL-invoked routines { Rp, Rq } in SR, if SDTP~p,r~ &#10918; SDTP~q,r~ in the type precedence
+list of SDTA~r~, then eliminate R~q~ from SR
+
+The set of subject routines is the set of SQL-invoked routines remaining in SR.
+
+9.5 Type precedence list determination
+
+
+...
+
+A subject routine of an invocation is an SQL-invoked routine that may be invoked by a <routine invocation>...
+If the subject routine is not an SQL-invoked method, then the SQL-invoked routine executed is
+that subject routine. 
+
+____
+
+Following the above rules, say there are a few functions:
+`FOO(INT)`, `FOO(SMALLINT)`, `FOO(DECIMAL)`, `FOO(NUMERIC)`.
+
+____
+Let ‘‘A &#10918; B’’ represent ‘‘A has precedence over B’’ and let ‘‘A ~ B’’ represent ‘‘A has the same
+precedence as B’
+____
+
+Now, we invoke `FOO(<INT>)`. How does it get resolved?
+
+____
+SDTA~1~ = declared type of A~1~ = INTEGER
+Type precedence list rules:
+- SMALLINT &#10918; INTEGER
+- INTEGER &#10918; DECIMAL
+- DECIMAL ~ NUMERIC
+- REAL &#10918; FLOAT
+- DOUBLE PRECISION &#10918; FLOAT
+- EXACT &#10918; APPROXIMATE
+
+PTC (Transitive closure of above P relationships)
+- SMALLINT &#10918; INTEGER -- removed
+- SMALLINT &#10918; DECIMAL -- removed
+- SMALLINT &#10918; NUMERIC -- removed
+- SMALLINT &#10918; REAL -- removed
+- SMALLINT &#10918; DOUBLE PRECISION -- removed
+- SMALLINT &#10918; FLOAT -- removed
+- INTEGER &#10918; DECIMAL -- removed
+- INTEGER &#10918; NUMERIC -- removed
+- INTEGER &#10918; REAL -- removed
+- INTEGER &#10918; DOUBLE PRECISION -- removed
+- INTEGER &#10918; FLOAT -- removed
+- DECIMAL ~ NUMERIC -- rempved
+- DECIMAL &#10918; REAL -- removed
+- DECIMAL &#10918; DOUBLE PRECISION -- removed
+- DECIMAL &#10918; FLOAT -- removed
+- NUMERIC ~ DECIMAL -- removed
+- NUMERIC &#10918; REAL -- removed
+- NUMERIC &#10918; DOUBLE PRECISION -- removed
+- NUMERIC &#10918; FLOAT -- removed
+- REAL &#10918; DOUBLE PRECISION -- removed
+- REAL &#10918; FLOAT -- removed
+- DOUBLE PRECISION &#10918; FLOAT -- removed
+
+TPL:
+ST = SET OF (INTEGER, DECIMAL, NUMERIC, REAL, DOUBLE PRECISION, FLOAT). Size = n.
+TPL = SET OF (
+    SMALLINT,
+    INTEGER,
+    NUMERIC/DECIMAL,
+    REAL,
+    DOUBLE PRECISION
+)
+
+Following the set of rules, then:
+FOO(SMALLINT) &#10918; FOO(INT)
+____
+
+====
+<routine invocation>
+
+1. Identifiers match (possibly candidate routine):
+
+- Otherwise, an SQL-invoked routine R is a possibly candidate routine for RI if R is an SQL-
+invoked function that is not an SQL-invoked method and the <qualified identifier> of the
+<routine name> of R is equivalent to the <qualified identifier> of RN.
+
+2. Is executable (executable routine)
+
+- Otherwise, an <SQL-invoked routine> R is an executable routine if and only if R is a possibly
+candidate routine and the current privileges include EXECUTE on R
+
+3. Is invokable (invokable routine). Same number of parameters and the parameter's type is in the type precedence list of the argument.
+
+- If <SQL argument list> does not immediately contain at least one <SQL argument>, then
+an invocable routine is an executable routine that has no SQL parameters.
+- RI has NA SQL parameters... Otherwise, the type designator of the declared type of Pi shall be in the type
+precedence list of the declared type of Ai.
+
+4. Subject routine (for no-argument invocation)
+
+- FIND THE PATH: If RI is contained in a <preparable statement> that is prepared in the
+current SQL-session by an <execute immediate statement> or a <prepare
+statement> or in a <direct SQL statement> that is invoked directly, then let
+DP be the SQL-path of the current SQL-session. // DIRECT SQL STATEMENT is relevant to us. DP is the SQL-Path of the session
+- FIND THE SUBJECT ROUTINE:
+    - If non-schema-qualified:
+        - RI is invokable
+        - RI's schema is in the DP (PATH)
+        - Choose the matching RI that is highest on the DP.
+    - If schema-qualified:
+        - If SN is ‘‘INFORMATION_SCHEMA’’, then the single candidate routine of RI is the
+built-in function identified by <routine name>
+        - Otherwise, SN shall be the <schema name> of a schema S. The subject routine of RI
+is the invocable routine (if any) contained in S.
+- THERE SHALL BE 1 SUBJECT ROUTINE OF RI
+
+- RETURN SUBJECT ROUTINE!
+
+5. Subject routine (for 1+ arguments)
+
+- 5.a. Candidate routines
+    - NO SCHEMA NAME:
+        - DP is SQL-Path of SQL Session
+        - The candidate routines of RI are the set union of invocable routines of all schemas whose <schema name> is in DP
+    - SCHEMA QUALIFIED:
+        - If SN is ‘‘INFORMATION_SCHEMA’’, then the single candidate routine of RI is the
+built-in function identified by <routine name>. -- SINGLE CANDIDATE IN INFO SCHEMA
+        - Otherwise, SN shall be the <schema name> of a schema S. The candidate routines
+of RI are the invocable routines (if any) contained in S. -- ALL CANDIDATES IN SCHEMA
+
+- 5.b. Candidate subject routines
+    - We apply the SUBJECT ROUTINE DETERMINATION to the candidate routines, yielding a set of candidate subject routines (CSR).
+
+- 5.c: Subject routines
+    - If RI is schema qualified, then there shall be exactly one candidate subject routine in CSR. THAT IS THE SUBJECT ROUTINE.
+    - If not-qualified:
+        - If only one in CSR, then the subject routine is the one.
+        - If more than 1, the subject routine SR is an SQL-invoked routine R1 in CSR
+such that there is no other candidate subject routine R2 in CSR for
+which the <schema name> of the schema that includes R2 precedes
+in DP the <schema name> of the schema that includes R1.
+
+6. Checking assignability:
+
+- For each P i, Ai shall be assignable to Pi according to the Syntax Rules of
+Subclause 9.2, ‘‘Store assignment’’, with Pi and Ai as TARGET and VALUE, re-
+spectively.
+
+INTERESTINGLY, another section:
+Subject routine determination
+for SQL-invoked functions considers the most specific types of all of the arguments to the invocation
+of the SQL-invoked function in order from left to right. Where there is not an exact match between
+the most specific types of the arguments and the declared types of the parameters, type precedence
+lists are used to determine the closest match. See Subclause 9.4, ‘‘Subject routine determination’’.
+
+====
