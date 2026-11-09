@@ -4,7 +4,7 @@
 
 # Summary
 
-This RFC adds a `JSON` type to PartiQL, following the JSON support in ISO/IEC 9075-2:2023 (SQL:2023): parsing and serializing JSON, the query operators `JSON_VALUE`, `JSON_QUERY` and `JSON_EXISTS`, the `IS JSON` predicate, the constructors, and the simplified accessor `j.a.b`. It defines how JSON works with PartiQL's `MISSING`, execution modes and dynamically typed values, and adds one extension: iterating a JSON array in `FROM`. Parts that need more PartiQL-specific design, such as `JSON_TABLE`, are listed under "Unresolved questions".
+This RFC adds a `JSON` type to PartiQL, following the JSON support in ISO/IEC 9075-2:2023 (SQL:2023): parsing and serializing JSON, the query operators `JSON_VALUE`, `JSON_QUERY` and `JSON_EXISTS`, the `IS JSON` predicate, the constructors, and the simplified accessor `j.a.b`. It defines how JSON works with PartiQL's `MISSING`, execution modes and expressions whose type is not known at compile time, and adds one extension: iterating a JSON array in `FROM`. Parts that need more PartiQL-specific design, such as `JSON_TABLE`, are listed under "Unresolved questions".
 
 # Motivation
 
@@ -54,9 +54,9 @@ The same text, laid out to read:
 
 `o` is the `orders` table. `o.payload` is the STRING above, and `p` stands for `JSON(o.payload)`, the JSON value parsed from it.
 
-## Typing Model: dynamically typed JSON values
+## Typing Model: JSON when the type is not known at compile time
 
-PartiQL is gradually typed. When the type of a value is not known until runtime, and the value is JSON, it follows the same rules as a value declared `JSON`: paths, `FROM`, CAST, comparison, and the input of the query operators. A query gives the same result whether or not the type was known in advance. An operation that is a compile error for a declared `JSON` value gives, at runtime, `MISSING` in permissive mode and an error in type checking mode.
+PartiQL is gradually typed. An expression's type may not be known at compile time, for example when there is no schema. Each value still has its type at runtime, and a value that is JSON follows the same rules as an expression declared `JSON`: paths, `FROM`, CAST, comparison, and the input of the query operators. A query gives the same result whether or not the type was known at compile time. An operation that is a compile error for an expression declared `JSON` gives, at runtime, `MISSING` in permissive mode and an error in type checking mode.
 
 ## Data Types: JSON Type (new section)
 
@@ -100,7 +100,7 @@ A JSON number is an exact numeric value (§9.42), so `10.5` keeps its exact valu
 | `CAST(j AS JSON)`, where `j` is `JSON` | `j` unchanged (§6.13) |
 | `CAST(NULL AS JSON)` | SQL `NULL` of type `JSON` (§6.13) |
 | `CAST(v AS JSON)`, where `v` is an Ion value | The JSON value with the same content. An Ion null inside `v` becomes JSON `null`. An Ion value with no JSON form, such as a timestamp, a blob, a symbol or an annotated value, is an error. The exact rules depend on how the specification defines its Ion type |
-| Any other CAST into or out of `JSON` | Not allowed: a compile error when the types are known, and otherwise `MISSING` in permissive mode and an error in type checking mode. Use `JSON(...)`, `JSON_SERIALIZE` or `JSON_VALUE ... RETURNING` instead |
+| Any other CAST into or out of `JSON` | Not allowed: a compile error when the types are known at compile time, and otherwise `MISSING` in permissive mode and an error in type checking mode. Use `JSON(...)`, `JSON_SERIALIZE` or `JSON_VALUE ... RETURNING` instead |
 
 ## Functions and Operators
 
@@ -190,7 +190,7 @@ The optional keyword says what kind of JSON value must be at the top level. With
 | SQL `NULL` | `NULL` |
 | `MISSING` | `MISSING` |
 | A value of another declared type, such as `1 IS JSON` | A compile error, as in SQL:2023 |
-| A dynamically typed value that is neither a string nor JSON at runtime | false |
+| An expression whose type is not known at compile time, and whose value is neither a string nor JSON | false |
 
 `IS JSON` is not one of PartiQL's type predicates, such as `x IS STRING`. Those test a value's type, so `'{}' IS STRUCT` is false. `IS JSON` tests what a string holds, so `'{}' IS JSON` is true. The grammar reads `IS JSON` as this predicate in every case.
 
@@ -240,7 +240,7 @@ json_path_string     = string_literal ;   (* a path in the SQL/JSON path languag
 
 - The operators follow SQL:2023 (§6.28, §6.35, §8.23).
 - A SQL `NULL` input gives SQL `NULL`. A `MISSING` input gives `MISSING`.
-- An input that is neither a string nor JSON is a compile error when its type is known, and otherwise `MISSING` in permissive mode and an error in type checking mode.
+- An input that is neither a string nor JSON is a compile error when its type is known at compile time, and otherwise `MISSING` in permissive mode and an error in type checking mode.
 - In lax mode, a key that does not exist is not an error: the path finds nothing, so `ON EMPTY` applies. Other errors, such as an input string that is not valid JSON, or a value that cannot convert to the `RETURNING` type, go to `ON ERROR`.
 
 **Defaults, from SQL:2023.**
@@ -292,7 +292,7 @@ p.customer.name
 - One result is returned as it is. Several results are wrapped in a JSON array. No result gives SQL `NULL`.
 - When keys repeat in an object, a step returns the first member with that key, in text order.
 - The result is a JSON value, even when it is a JSON string. To get an SQL value, use `JSON_VALUE`.
-- `x['name']` is not allowed on a JSON value, because neither the simplified accessor nor the path language has a bracket key. Write `x."name"`, which also covers keys with dots or spaces. The PartiQL shorthand `x['name']` for `x.'name'` stays a rule for tuples only. When the type is known only at runtime, `x['name']` on a JSON value gives `MISSING` in permissive mode and an error in type checking mode.
+- `x['name']` is not allowed on a JSON value, because neither the simplified accessor nor the path language has a bracket key. Write `x."name"`, which also covers keys with dots or spaces. The PartiQL shorthand `x['name']` for `x.'name'` stays a rule for tuples only. When the type is not known at compile time, `x['name']` on a value that is JSON gives `MISSING` in permissive mode and an error in type checking mode.
 - `x[e]`, where `e` is an expression that is not a string literal, is an array step whose index is the value of `e`. If `e` is not a number, the step is an error (§9.46), so the result is SQL `NULL`.
 - The simplified accessor applies only to an expression of type `JSON`. A string is not parsed: `o.payload.customer` keeps today's tuple path behavior, and users write `JSON(o.payload).customer`.
 - Name resolution runs first, with today's rules. In `JSON(o.payload).customer`, `o.payload` resolves as today, and the steps after `JSON(...)` follow this section.
@@ -343,7 +343,7 @@ json_null_clause = "NULL" "ON" "NULL" | "ABSENT" "ON" "NULL" ;
 
 **Rules.** The constructors follow SQL:2023 (§6.34, §10.11).
 
-- *Result type.* With no `RETURNING` clause, the result is `JSON` if any input value has the declared type `JSON`, and a `STRING` otherwise. Only values count, not keys. `JSON_ARRAY` over a query has no input values, so it returns a `STRING`. A dynamically typed input is not declared `JSON`, so it gives a `STRING` even if it holds JSON at runtime. `RETURNING JSON` gives `JSON`.
+- *Result type.* With no `RETURNING` clause, the result is `JSON` if any input value has the declared type `JSON`, and a `STRING` otherwise. Only values count, not keys. `JSON_ARRAY` over a query has no input values, so it returns a `STRING`. An input whose type is not known at compile time is not declared `JSON`, so it gives a `STRING` even if its value is JSON. `RETURNING JSON` gives `JSON`.
 - *`NULL` values.* `JSON_OBJECT` defaults to `NULL ON NULL`, so a `NULL` value becomes JSON `null`. `JSON_ARRAY` and `JSON_ARRAYAGG` default to `ABSENT ON NULL`, so `NULL` values are left out.
 - *`MISSING` values.* A `MISSING` value leaves its member or element out, whichever null clause is used, as a `MISSING` attribute is left out of a tuple.
 - *Keys.* A `NULL` key is an error.
@@ -370,13 +370,13 @@ FROM orders AS o, JSON(o.payload).items AS i
 
 #### Type Mismatch
 
-A function that is not defined for `JSON` treats a JSON argument as a wrongly typed input: a compile error when the type is known, and otherwise `MISSING` in permissive mode and an error in type checking mode. `IS NULL`, `IS MISSING` and `COUNT` accept JSON.
+A function that is not defined for `JSON` treats a JSON argument as a wrongly typed input: a compile error when the type is known at compile time, and otherwise `MISSING` in permissive mode and an error in type checking mode. `IS NULL`, `IS MISSING` and `COUNT` accept JSON.
 
 A JSON value in `WHERE`, `HAVING` or `ON` is not a boolean, so a JSON `true` does not count as true.
 
 #### Equality, grouping and ordering
 
-A JSON value is not allowed in `=`, `<`, `IN`, `BETWEEN`, `DISTINCT`, `GROUP BY`, `ORDER BY`, the set operations, `MIN`, `MAX` or a join condition, and neither is a value that contains JSON. This is what SQL:2023 specifies for an implementation without features T879, T880 and T881. It is a compile error when the type is known, and an error in both modes otherwise. To compare, use `JSON_VALUE` results or `JSON_SERIALIZE` text. How to compare JSON values is an unresolved question.
+A JSON value is not allowed in `=`, `<`, `IN`, `BETWEEN`, `DISTINCT`, `GROUP BY`, `ORDER BY`, the set operations, `MIN`, `MAX` or a join condition, and neither is a value that contains JSON. This is what SQL:2023 specifies for an implementation without features T879, T880 and T881. It is a compile error when the type is known at compile time, and an error in both modes otherwise. To compare, use `JSON_VALUE` results or `JSON_SERIALIZE` text. How to compare JSON values is an unresolved question.
 
 #### Result types of `CASE`, `COALESCE`, `NULLIF` and set operations
 
@@ -412,7 +412,7 @@ This section relates the RFC to SQL:2023. The RFC follows the JSON support in SQ
 
 1. **`MISSING`.** SQL:2023 has no `MISSING`. This RFC defines how `MISSING` behaves as an input to each operator.
 2. **Permissive mode.** SQL:2023 has only errors. This RFC defines permissive mode for invalid JSON text and wrongly typed input.
-3. **Dynamically typed values.** SQL:2023 decides by declared type. PartiQL is gradually typed, so this RFC defines what happens when a value's type is known only at runtime.
+3. **Types not known at compile time.** SQL:2023 decides by declared type. PartiQL is gradually typed, so this RFC defines what happens when an expression's type is not known at compile time.
 4. **Iteration in `FROM`.** SQL:2023 turns a JSON array into rows only through `JSON_TABLE`. PartiQL also allows a JSON array in `FROM`.
 5. **Ion values.** SQL:2023 has no Ion type. This RFC allows a CAST from an Ion value to JSON.
 
@@ -508,7 +508,7 @@ These parts of SQL:2023's JSON support need PartiQL-specific design. The specifi
 | CAST from JSON to an Ion value | Not in SQL:2023 | Whether to allow it, once the specification defines its Ion type |
 | `x.'name'` on JSON | T863 | Whether to support the single-quoted member step |
 | A type predicate for JSON, testing whether a value has type `JSON` | Not in SQL:2023 | Its name, which must not be `IS JSON`, and how it fits PartiQL's other type predicates |
-| `IS JSON` on a dynamically typed value that is neither a string nor JSON | Not in SQL:2023 | Whether the result is false, or follows PartiQL's rule for wrongly typed input |
+| `IS JSON` on an expression whose type is not known at compile time, when the value is neither a string nor JSON | Not in SQL:2023 | Whether the result is false, or follows PartiQL's rule for wrongly typed input |
 
 # Future possibilities
 
