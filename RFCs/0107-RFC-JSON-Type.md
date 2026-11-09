@@ -25,7 +25,7 @@ This RFC is about a JSON *type* inside the language. It is separate from queryin
 - Changing how tuples, arrays or Ion values behave. Every existing query keeps its result.
 - Defining storage or encoding of JSON values. That is up to each implementation.
 
-# Specification
+# Guide-level explanation
 
 Each part below names the chapter of the PartiQL specification it adds to, so that it can move into the specification as written. The chapter names are those of the specification revamp in [partiql/partiql-lang#102](https://github.com/partiql/partiql-lang/pull/102), which is still in review. If its layout changes, these parts move with it.
 
@@ -404,9 +404,9 @@ FROM orders AS o, JSON(o.payload).items AS i AT n
 -- <<{'sku': 'A1', 'n': 0}, {'sku': 'B2', 'n': 1}>>, where sku is a STRING and n an INT
 ```
 
-# Relation to SQL:2023
+# Reference-level explanation
 
-This RFC follows the JSON support in SQL:2023 Part 2: §4.8 and §4.48 (the type and data model), §6.28 and §6.34 to §6.41 (the operators, constructors, parse, serialize and scalar), §8.22 and §8.23 (`IS JSON` and `JSON_EXISTS`), §9.42 to §9.46 (parsing, and the path language) and §10.11 (the aggregates). Where SQL:2023 defines a behavior, PartiQL uses it.
+This section relates the RFC to SQL:2023. The RFC follows the JSON support in SQL:2023 Part 2: §4.8 and §4.48 (the type and data model), §6.28 and §6.34 to §6.41 (the operators, constructors, parse, serialize and scalar), §8.22 and §8.23 (`IS JSON` and `JSON_EXISTS`), §9.42 to §9.46 (parsing, and the path language) and §10.11 (the aggregates). Where SQL:2023 defines a behavior, PartiQL uses it.
 
 ## Where PartiQL differs
 
