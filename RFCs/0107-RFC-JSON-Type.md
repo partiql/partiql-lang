@@ -1,6 +1,6 @@
 - Start Date: 2026-11-05
 - PartiQL Issue: [partiql/partiql-lang#106](https://github.com/partiql/partiql-lang/issues/106)
-- RFC PR: (link once the PR is created)
+- RFC PR: [partiql/partiql-lang#107](https://github.com/partiql/partiql-lang/pull/107)
 
 # Summary
 
