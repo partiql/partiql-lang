@@ -413,7 +413,7 @@ o.payload.customer             ->  MISSING in permissive mode, an error in type 
 JSON(o.payload).customer.name  ->  JSON "Bob"     -- parse first, then read
 
 -- The result is JSON, not an SQL value
-p.customer.name = 'Bob'                          ->  a compile error  -- JSON is not allowed in =
+p.customer.name = 'Bob'                          ->  a compile error  -- a JSON value and a STRING are not comparable
 JSON_VALUE(p, 'lax $.customer.name') = 'Bob'     ->  true             -- JSON_VALUE returns the STRING 'Bob'
 ```
 
@@ -428,7 +428,7 @@ The last two examples show the most common mistake. `p.customer.name` is JSON `"
 | A member step reaches an array | `MISSING`, or an error                       | The step runs on each element                                                            |
 | `x['name']`                    | Shorthand for `x.'name'`                     | Not allowed. Write `x."name"`                                                            |
 | How many results               | Exactly one                                  | Zero or more. Several are wrapped in an array                                            |
-| `=`, `GROUP BY`, `ORDER BY`    | Allowed                                      | Not allowed yet (see [Equality](#equality)) |
+| `=`, `GROUP BY`, `ORDER BY`    | Allowed                                      | To be decided (see [Equality](#equality)) |
 | `x IS STRUCT`                  | True for a tuple, such as `{'a': 1}`         | False, because a JSON object is JSON, not a tuple. Use `x IS JSON OBJECT`                |
 |                                |                                              |                                                                                          |
 
@@ -461,7 +461,7 @@ json_input       = expression [ "FORMAT" "JSON" ] ;   (* as in "JSON parse" *)
 - *Keys.* A `NULL` key is an error. A `MISSING` key, such as `t.k` when `t` has no attribute `k`, follows PartiQL's rule for tuple attribute names. It leaves its member out in permissive mode, and is an error in type checking mode. This applies to `JSON_OBJECT` and `JSON_OBJECTAGG`. By default (`WITHOUT UNIQUE KEYS`), `JSON_OBJECT` and `JSON_OBJECTAGG` keep members with the same key. With `WITH UNIQUE KEYS`, a duplicate key is an error (§6.34, §10.11), which is `MISSING` in permissive mode.
 - *Inputs.* A JSON input is nested as JSON. A string, number or boolean input becomes the matching JSON scalar. A datetime input is cast to `STRING` and becomes a JSON string (§6.34). A string input is not parsed. A string input followed by `FORMAT JSON` is parsed as JSON text, and the parsed value is nested.
 - *`FORMAT JSON` and `RETURNING`.* `FORMAT JSON` after an input says how to read that input. `RETURNING` says what type the result has. The two are independent. `FORMAT JSON` does not change the result type, and `RETURNING` does not change how an input is read.
-- *Order.* Without `ORDER BY`, `JSON_ARRAYAGG` puts the rows of a group in an array in no defined order. With `ORDER BY`, the elements follow the sort keys, which follow the rules of PartiQL's `ORDER BY`. A sort key of type `JSON` is not allowed (see [Equality](#equality)).
+- *Order.* Without `ORDER BY`, `JSON_ARRAYAGG` puts the rows of a group in an array in no defined order. With `ORDER BY`, the elements follow the sort keys, which follow the rules of PartiQL's `ORDER BY`. A sort key of type `JSON` is to be decided, with comparison (see [Equality](#equality)).
 
 **Examples.**
 
@@ -522,17 +522,36 @@ FROM orders AS o, JSON(o.payload).items AS i
 
 A function that is not defined for `JSON` treats a JSON argument as a wrongly typed input. It is a compile error when the type is known at compile time, and otherwise `MISSING` in permissive mode and an error in type checking mode. `IS NULL`, `IS MISSING` and `COUNT` accept JSON.
 
+```sql
+UPPER(p.customer.name)                             ->  a compile error  -- UPPER is not defined for JSON
+UPPER(JSON_VALUE(p, 'lax $.customer.name'))        ->  STRING 'BOB'
+p.id + 1                                           ->  a compile error
+JSON_VALUE(p, 'lax $.id' RETURNING INT) + 1        ->  INT 8
+p.note IS NULL                                     ->  false            -- JSON null is a value
+```
+
 #### Absent Value Inputs
 
 Each JSON operator returns SQL `NULL` for a SQL `NULL` input and `MISSING` for a `MISSING` input, unless its section says otherwise. The constructors are the exception: they leave a `MISSING` value out (see [JSON constructors](#json-constructors-json_object-json_array-json_arrayagg-json_objectagg)).
 
+```sql
+JSON_VALUE(NULL, 'lax $.a')            ->  NULL
+JSON(MISSING)                          ->  MISSING
+JSON_OBJECT('a' : MISSING, 'b' : 1)    ->  STRING '{"b":1}'   -- the constructor exception
+```
+
 #### Equality
 
-A JSON value is not allowed in `=`, `<`, `IN`, `BETWEEN`, `DISTINCT`, `GROUP BY`, `ORDER BY`, the set operations, `MIN`, `MAX` or a join condition, and neither is a value that contains JSON. This is what SQL:2023 specifies for an implementation without features T879, T880 and T881. It is a compile error when the type is known at compile time, and an error in both modes otherwise. To compare, use `JSON_VALUE` results or `JSON_SERIALIZE` text. How to compare JSON values is an unresolved question.
+To be decided. SQL:2023 lets JSON values take part in `=`, `<`, `IN`, `DISTINCT`, `GROUP BY`, `ORDER BY`, the set operations, `MIN`, `MAX` and joins, as the optional features T879, T880 and T881 (§4.8.2, §9.11, §9.12, §9.14). How PartiQL compares JSON values is under [Unresolved questions](#unresolved-questions). A JSON value and a value of another type, such as a `STRING`, are not comparable. To compare JSON with an SQL value, use `JSON_VALUE` or `JSON_SERIALIZE`.
+
+```sql
+p.id = 7                                         ->  a compile error  -- a JSON value and an INT are not comparable
+JSON_VALUE(p, 'lax $.id' RETURNING INT) = 7      ->  true
+```
 
 #### Aggregate Functions
 
-`MIN` and `MAX` do not accept JSON (see [Equality](#equality)), and `COUNT` does. This RFC adds `JSON_ARRAYAGG` and `JSON_OBJECTAGG`, which are defined with the other constructors (see [JSON constructors](#json-constructors-json_object-json_array-json_arrayagg-json_objectagg)).
+`MIN` and `MAX` on JSON are to be decided, with comparison (see [Equality](#equality)). `COUNT` accepts JSON. This RFC adds `JSON_ARRAYAGG` and `JSON_OBJECTAGG`, which are defined with the other constructors (see [JSON constructors](#json-constructors-json_object-json_array-json_arrayagg-json_objectagg)).
 
 #### Indexing Operator
 
@@ -545,6 +564,11 @@ On a value of type `JSON`, `x.name` and `x."name"` are steps of the simplified a
 #### Type Checking Functions
 
 Type predicates such as `x IS STRUCT` are false for a JSON value, because a JSON object is JSON, not a tuple. A type predicate for JSON itself is an unresolved question. `IS JSON` is not a type predicate (see [`IS JSON`](#is-json)).
+
+```sql
+p.customer IS STRUCT         ->  false   -- a JSON object is not a tuple
+p.customer IS JSON OBJECT    ->  true
+```
 
 ## PartiQL Query Syntax
 
@@ -579,7 +603,7 @@ A JSON value in `WHERE`, `HAVING` or `ON` is not a boolean, so a JSON `true` doe
 
 #### GROUP BY Clause and ORDER BY Clause
 
-A JSON value is not allowed as a grouping key or a sort key (see [Equality](#equality)).
+A JSON value as a grouping key or a sort key is to be decided, with comparison (see [Equality](#equality)).
 
 # Relation to SQL:2023
 
@@ -699,7 +723,7 @@ Each rule in this RFC corresponds to a rule in SQL:2023:
 
 ## Conformance
 
-PartiQL claims these SQL:2023 features once implemented: T801 (JSON data type), T803 (string-based JSON), T811 (basic constructors), T812 (`JSON_OBJECTAGG`), T813 (`JSON_ARRAYAGG` with `ORDER BY`), T814 (colon in `JSON_OBJECT`), T821 (basic query operators) in part, without `JSON_TABLE`, T822 (`IS JSON WITH UNIQUE KEYS`), T823 (`PASSING`), T825 (`ON EMPTY` and `ON ERROR`), T826 (general value expression in `ON EMPTY` and `ON ERROR`), T828 (`JSON_QUERY`), T829 (array wrapper options), T830 (unique keys in constructors), T831 to T837 and T840 (the path language: strict mode, item methods, several subscripts, wildcards, filters, `starts with`, `like_regex`, hex integer literals), T865 to T878 (item methods in path strings), T860, T861 and T864 (simplified accessor). It does not claim the `JSON_TABLE` features (T824, T827, T838), or T862 and T863, which are under [Unresolved questions](#unresolved-questions). Conformance tests for each rule in this RFC are added to the PartiQL conformance test suite.
+PartiQL claims these SQL:2023 features once implemented: T801 (JSON data type), T803 (string-based JSON), T811 (basic constructors), T812 (`JSON_OBJECTAGG`), T813 (`JSON_ARRAYAGG` with `ORDER BY`), T814 (colon in `JSON_OBJECT`), T821 (basic query operators) in part, without `JSON_TABLE`, T822 (`IS JSON WITH UNIQUE KEYS`), T823 (`PASSING`), T825 (`ON EMPTY` and `ON ERROR`), T826 (general value expression in `ON EMPTY` and `ON ERROR`), T828 (`JSON_QUERY`), T829 (array wrapper options), T830 (unique keys in constructors), T831 to T837 and T840 (the path language: strict mode, item methods, several subscripts, wildcards, filters, `starts with`, `like_regex`, hex integer literals), T865 to T878 (item methods in path strings), T860, T861 and T864 (simplified accessor). It does not claim the `JSON_TABLE` features (T824, T827, T838), the comparison features (T879, T880, T881), or T862 and T863, which are under [Unresolved questions](#unresolved-questions). Conformance tests for each rule in this RFC are added to the PartiQL conformance test suite.
 
 # References
 
