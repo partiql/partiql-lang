@@ -45,7 +45,7 @@ orders = << {
 
 The same text, laid out to read:
 
-```
+```json
 {"id": 7,
  "customer": {"name": "Bob", "Tier": "gold"},
  "items": [{"sku": "A1", "price": 10.5}, {"sku": "B2", "price": 4}],
@@ -143,7 +143,7 @@ json_unique_keys = ( "WITH" | "WITHOUT" ) "UNIQUE" [ "KEYS" ] ;
 
 **Examples.**
 
-```
+```sql
 JSON(o.payload)               ->  JSON {"id": 7, "customer": {...}, "items": [...], "note": null}
 JSON('"abc"')                 ->  JSON "abc", a JSON string
 JSON('abc')                   ->  MISSING in permissive mode, an error in type checking mode  -- abc is not JSON
@@ -170,7 +170,7 @@ json_returning = "RETURNING" data_type [ "FORMAT" "JSON" ] ;
 
 **Examples.**
 
-```
+```sql
 JSON_SERIALIZE(p.customer)    ->  STRING '{"name":"Bob","Tier":"gold"}'
 JSON_SCALAR(10.5)             ->  JSON 10.5
 JSON_SCALAR('Bob')            ->  JSON "Bob"
@@ -216,7 +216,7 @@ The optional keyword says what kind of JSON value must be at the top level. With
 
 **Examples.**
 
-```
+```sql
 o.payload IS JSON             ->  true
 o.payload IS JSON OBJECT      ->  true
 o.payload IS JSON ARRAY       ->  false
@@ -233,7 +233,7 @@ Each query operator takes an input, which is a string that holds JSON or a JSON 
 
 **Path strings.** The second argument of each query operator is a path string, written in the SQL/JSON path language of SQL:2023 (§9.45, §9.46). The PartiQL specification does not have this language yet, so this RFC adopts it by reference instead of defining it again.
 
-```
+```sql
 'lax $.customer.name'
 --  lax        the mode, lax or strict
 --  $          the whole input value
@@ -304,7 +304,7 @@ json_input           = expression [ "FORMAT" "JSON" ] ;   (* as in "JSON parse" 
 
 **Examples.**
 
-```
+```sql
 -- JSON_VALUE returns one SQL scalar, a STRING by default
 JSON_VALUE(o.payload, 'lax $.customer.name')                    ->  STRING 'Bob'
 JSON_VALUE(o.payload, 'lax $.id' RETURNING INT)                 ->  INT 7
@@ -345,13 +345,13 @@ JSON_EXISTS(o.payload, 'strict $.age')                          ->  false  -- st
 
 The simplified accessor is SQL:2023's short way to read JSON (§6.36). Instead of a `JSON_QUERY` call with a path string, a query writes path steps directly after an expression of type `JSON`, using PartiQL's existing steps `.name`, `."name"` and `[n]`. It adds no new syntax.
 
-```
+```sql
 p.customer.name      ->  JSON "Bob"
 ```
 
 Each simplified accessor is the same as one `JSON_QUERY` call (§6.36). The clauses of that call give its rules:
 
-```
+```sql
 p.customer.name
 <=> JSON_QUERY(p, 'lax $.customer.name'           -- the same steps, in lax mode
                WITH CONDITIONAL ARRAY WRAPPER      -- one result is returned as it is, several are wrapped in an array
@@ -376,7 +376,7 @@ p.customer.name
 
 **Examples.**
 
-```
+```sql
 -- Member steps, and exact case
 p.customer.name                ->  JSON "Bob"
 p.customer.tier                ->  NULL           -- keys match exact case, and the key is "Tier"
@@ -465,7 +465,7 @@ json_input       = expression [ "FORMAT" "JSON" ] ;   (* as in "JSON parse" *)
 
 **Examples.**
 
-```
+```sql
 -- Result type: JSON only if an input value is declared JSON, or with RETURNING JSON
 JSON_OBJECT('id' : 7)                          ->  STRING '{"id":7}'                 -- no input is JSON
 JSON_OBJECT('id' : 7 RETURNING JSON)           ->  JSON {"id":7}
