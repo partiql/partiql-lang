@@ -149,6 +149,7 @@ JSON('abc')           ->  MISSING in permissive mode, an error in type checking 
 | In JSON text | PartiQL type |
 |---|---|
 | `7` | `INT` |
+| `3000000000` | `BIGINT` |
 | `10.5` | `DECIMAL` |
 | `12345678901234567890123` | `DECIMAL` |
 | `1e3` | `FLOAT` |
@@ -513,13 +514,15 @@ SELECT VALUE JSON_QUERY(x, 'lax $.a') FROM [JSON('{"a": [1]}'), '{"a": [1]}'] AS
 -- << JSON [1], STRING '[1]' >>
 ```
 
-**Wrappers.** Without a wrapper, several items are an error. `WITH CONDITIONAL ARRAY WRAPPER` wraps the items in an array only when there are several, and `WITH WRAPPER` always wraps.
+**Wrappers.** Without a wrapper, several items are an error, and `WITH WRAPPER` always wraps. `WITH CONDITIONAL ARRAY WRAPPER` wraps several items in an array. For a single item it depends on the result type. A result of type `JSON` is not wrapped (§9.44). A string result is wrapped when the item is a scalar, and not when it is an array or an object (§9.49).
 
 ```sql
 JSON_QUERY(p, 'lax $.items[*].price')                                ->  NULL        -- two items, no wrapper
 JSON_QUERY(p, 'lax $.items[*].price' WITH CONDITIONAL ARRAY WRAPPER) ->  JSON [10.5, 4]
 JSON_QUERY(p, 'lax $.id' WITH CONDITIONAL ARRAY WRAPPER)             ->  JSON 7      -- one item, not wrapped
 JSON_QUERY(p, 'lax $.id' WITH WRAPPER)                               ->  JSON [7]    -- always wrapped
+JSON_QUERY(o.payload, 'lax $.id' WITH CONDITIONAL ARRAY WRAPPER)     ->  STRING '[7]'   -- a string result wraps one scalar
+JSON_QUERY(o.payload, 'lax $.customer' WITH CONDITIONAL ARRAY WRAPPER)  ->  STRING '{"name":"Bob","Tier":"gold"}'   -- but not one object
 ```
 
 **Quotes.** With a string result type, an SQL/JSON string scalar keeps its quotes by default. `OMIT QUOTES` returns the string itself. A quotes clause cannot follow `WITH ... WRAPPER`, and `OMIT QUOTES` is not allowed with `RETURNING JSON` (§6.35).
@@ -605,7 +608,7 @@ p.id[0]                ->  JSON 7           -- 7 counts as the one-element array
 ```sql
 p.items[0]                                   ->  JSON {"sku":"A1","price":10.5}
 p.items.sku                                  ->  JSON ["A1","B2"]
-p.customer.name = 'Bob'                      ->  a compile error   -- a value of type JSON and a STRING
+p.customer.name = 'Bob'                      ->  not specified yet   -- a value of type JSON and a STRING
 JSON_VALUE(p, 'lax $.customer.name') = 'Bob' ->  true
 ```
 
@@ -617,6 +620,12 @@ JSON_VALUE(p, 'lax $.customer.name') = 'Bob' ->  true
 o.payload.customer               ->  MISSING in permissive mode, an error in type checking mode   -- a STRING
 JSON(o.payload).customer.name    ->  JSON "Bob"
 (JSON(o.payload)).customer.name  ->  JSON "Bob"
+```
+
+**Absent values.** When the value before the steps is SQL `NULL` of type `JSON`, the result is SQL `NULL`, and `MISSING` gives `MISSING`, as for `JSON_QUERY`.
+
+```sql
+(CAST(NULL AS JSON)).a           ->  NULL
 ```
 
 **Name resolution.** Name resolution runs first, with today's rules. In `JSON(o.payload).customer`, `o.payload` resolves as today, and only the steps after a value of type `JSON` follow this section.
@@ -665,10 +674,10 @@ SELECT COUNT(x) AS c FROM [JSON('1'), NULL, JSON('null')] AS x
 
 ### Comparison, grouping and ordering
 
-Comparing values of type `JSON` is not specified yet: `=`, `<`, `IN`, `DISTINCT`, `GROUP BY`, `ORDER BY`, `UNION` and the other set operations that remove duplicates, and joins on a JSON key (see [Unresolved questions](#unresolved-questions)). A value of type `JSON` and a value of another type are not comparable. To compare JSON with an SQL value, read it with `JSON_VALUE`.
+Comparing a value of type `JSON` is not specified yet, with another value of type `JSON` or with a value of another type: `=`, `<`, `IN`, `DISTINCT`, `GROUP BY`, `ORDER BY`, `UNION` and the other set operations that remove duplicates, and joins on a JSON key (see [Unresolved questions](#unresolved-questions)). To compare JSON with an SQL value, read it with `JSON_VALUE`.
 
 ```sql
-p.id = 7                                         ->  a compile error   -- a value of type JSON and an INT
+p.id = 7                                         ->  not specified yet   -- a value of type JSON and an INT
 JSON_VALUE(p, 'lax $.id' RETURNING INT) = 7      ->  true
 ```
 
@@ -773,7 +782,7 @@ These need further design, and are not needed by the rules above. They are not q
 | More steps in the simplified accessor: wildcards `.*` and `[*]`, several subscripts and ranges, `.'name'`, and item methods such as `j.a.number()` | §6.36, T862, T863 | Each overlaps PartiQL syntax: path wildcards, the tuple step `.'name'`, and function calls. Which to allow, and how they parse |
 | What `PASSING` gives for SQL `NULL`, `MISSING`, a tuple, an array, a bag or an Ion value | §9.46, §10.14 | What each becomes inside the path. SQL:2023 casts types it doesn't list to a string (IV165) |
 | Constructor inputs of other types: an interval, a binary value, a tuple, an array, a bag or an Ion value | §6.34 casts other SQL types to a string | Whether to accept each, and what it becomes. PostgreSQL gives `"1 day"` for an interval and `"\\x4142"` for binary |
-| Comparison, grouping and ordering of values of type `JSON`, including a `JSON` sort key in `JSON_ARRAYAGG` | T879 to T882 | Equality and ordering of SQL/JSON items (IA224, IA225) |
+| Comparison, grouping and ordering of values of type `JSON`, with each other and with other types, including a `JSON` sort key in `JSON_ARRAYAGG` | T879 to T882 | Equality and ordering of SQL/JSON items (IA224, IA225). Whether `JSON('7') = 7` is `false`, as PartiQL's equality gives for other types, or an error, as SQL:2023 gives without T879 |
 | `JSON_TABLE` | §7.11, T824, T827, T838 | How it fits PartiQL's `FROM`, `MISSING` and execution modes |
 | How `CAST(v AS JSON)` maps an Ion value to an SQL/JSON item | Not in SQL:2023 | How each Ion value maps, such as an Ion null, a typed null, a timestamp, a symbol, a blob or an annotated value |
 
