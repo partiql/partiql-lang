@@ -21,7 +21,7 @@ SQL:2023 defines JSON as a type, and this RFC does the same. Following SQL:2023 
 
 ## Conventions
 
-**Grammar.** Rules use the EBNF style of the PartiQL specification: `=` defines a rule, terminals are in quotes, `[ ]` is optional, `{ }` repeats, `|` separates alternatives, and `;` ends a rule.
+**Grammar.** Rules use the EBNF (Extended Backus–Naur Form) style of the PartiQL specification: `=` defines a rule, terminals are in quotes, `[ ]` is optional, `{ }` repeats, `|` separates alternatives, and `;` ends a rule.
 
 **Terms.** This RFC uses SQL:2023's terms, which keep text and parsed values apart:
 
@@ -54,7 +54,7 @@ The type name is `JSON`, and it has no parameters (§4.8). A query cannot write 
 3. An array of items.
 4. An object, whose members each pair a string key with an item.
 
-A JSON number in JSON text becomes an SQL/JSON scalar, read the way SQL reads the same digits as a literal (§9.42). Without an exponent, such as `10.5`, it is an exact number, like `DECIMAL`. With an exponent, such as `1e3`, it is an approximate number, a binary floating point like `FLOAT`. PartiQL's literals already follow this rule:
+A JSON number in JSON text becomes an SQL/JSON scalar, read the way SQL reads the same digits as a literal (§9.42). Without an exponent, such as `10.5`, it is an exact number, like `DECIMAL`. With an exponent, such as `1e3`, it is an approximate number, a binary floating point: `DOUBLE PRECISION`. PartiQL's literals already follow this rule:
 
 ```sql
 0.1 + 0.2        ->  0.3                    -- exact
@@ -152,18 +152,22 @@ JSON('abc')           ->  MISSING in permissive mode, an error in type checking 
 | `3000000000` | `BIGINT` |
 | `10.5` | `DECIMAL` |
 | `12345678901234567890123` | `DECIMAL` |
-| `1e3` | `FLOAT` |
+| `1e3` | `DOUBLE PRECISION` |
 
-**A number out of range.** A number too large for its type, such as `1e400`, is not accepted. The result is `MISSING` in permissive mode and an error in type checking mode, as for invalid text.
+**A number out of range.** A JSON number with an exponent is a `DOUBLE PRECISION`. One too large for it, such as `1e400`, is not accepted: the result is `MISSING` in permissive mode and an error in type checking mode, as for invalid text. One too close to zero, such as `1e-400`, becomes `0`, which is not an error. A JSON number without an exponent is exact, and stays exact however many digits it has. Arithmetic or a CAST on it then follows the limits of `DECIMAL`.
 
 ```sql
-JSON('{"x": 1e400}')  ->  MISSING in permissive mode, an error in type checking mode
+JSON('{"x": 1e400}')                                         ->  MISSING in permissive mode, an error in type checking mode
+JSON('{"x": 1e-400}').x                                      ->  JSON 0.0
+JSON('{"x": 1000000000000000000000000000000000000000000}').x  ->  JSON 1000000000000000000000000000000000000000000   -- a DECIMAL
 ```
 
-**Duplicate keys.** Parsing keeps every member, including members with duplicate keys. This is `WITHOUT UNIQUE KEYS`, the default. A path step on a repeated key returns the first member, in the order of the text, in both modes.
+**Limits.** An implementation caps the nesting depth of JSON text and the size of the text, its strings and its keys. Text over a cap raises an error in both modes.
+
+**Duplicate keys.** Parsing keeps every member, including members with duplicate keys. This is `WITHOUT UNIQUE KEYS`, the default. Which member a path step on a repeated key returns is up to the implementation.
 
 ```sql
-JSON('{"a": 1, "a": 2}').a    ->  JSON 1
+JSON('{"a": 1, "a": 2}').a    ->  JSON 1 or JSON 2, depending on the implementation
 ```
 
 **`WITH UNIQUE KEYS`.** Text with a duplicate key in any object is not accepted (§9.42). The result is `MISSING` in permissive mode and an error in type checking mode.
@@ -208,13 +212,14 @@ JSON_SERIALIZE(JSON_SCALAR(DATE '2024-01-01'))    ->  MISSING in permissive mode
 json_scalar = "JSON_SCALAR" "(" expression ")" ;
 ```
 
-**Inputs.** The input must be a string, a number, a boolean or a datetime. Any other declared type, such as an interval, a binary value, a tuple, an array or `JSON`, is a compile error. An input whose type is not known at compile time, and that is none of these at runtime, gives `MISSING` in permissive mode and an error in type checking mode.
+**Inputs.** The input must be a string, a number, a boolean or a datetime. A `REAL` or `DOUBLE PRECISION` that is `Infinity` or `NaN` is not accepted: the result is `MISSING` in permissive mode and an error in type checking mode. Any other declared type, such as an interval, a binary value, a tuple, an array or `JSON`, is a compile error. An input whose type is not known at compile time, and that is none of these at runtime, gives `MISSING` in permissive mode and an error in type checking mode.
 
 ```sql
 JSON_SCALAR(10.5)                  ->  JSON 10.5
 JSON_SCALAR('Bob')                 ->  JSON "Bob"
 JSON_SCALAR(DATE '2024-01-01')     ->  an SQL/JSON scalar that is DATE '2024-01-01'
 JSON_SCALAR(INTERVAL '1' DAY)      ->  a compile error
+JSON_SCALAR(1e400)                 ->  MISSING in permissive mode, an error in type checking mode   -- the literal is Infinity
 ```
 
 **Absent inputs.** SQL `NULL` gives SQL `NULL`, not SQL/JSON null (§6.41). `MISSING` gives `MISSING`.
@@ -235,7 +240,7 @@ json_member      = [ "KEY" ] expression "VALUE" json_input
                  | expression ":" json_input ;
 json_array       = "JSON_ARRAY" "(" [ json_input { "," json_input } [ json_null_clause ] ]
                    [ json_returning ] ")"
-                 | "JSON_ARRAY" "(" query [ json_null_clause ] [ json_returning ] ")" ;
+                 | "JSON_ARRAY" "(" query [ "FORMAT" "JSON" ] [ json_null_clause ] [ json_returning ] ")" ;
 json_arrayagg    = "JSON_ARRAYAGG" "(" json_input [ "ORDER" "BY" order_by_item { "," order_by_item } ]
                    [ json_null_clause ] [ json_returning ] ")" ;
 json_objectagg   = "JSON_OBJECTAGG" "(" json_member [ json_null_clause ] [ json_unique_keys ]
@@ -261,7 +266,7 @@ SELECT g, JSON_ARRAYAGG(t.v) AS arr FROM t GROUP BY t.g AS g
 -- group 2 holds JSON('1'), 'c'    ->  arr is JSON [1,"c"]
 ```
 
-**Inputs.** A value of type `JSON` is nested as it is. A string, number or boolean becomes an SQL/JSON scalar. A datetime is cast to `STRING` and becomes an SQL/JSON string scalar (§6.34). A string is not parsed, unless it is followed by `FORMAT JSON`, or it is the result of a constructor or of `JSON_QUERY`, which implies `FORMAT JSON` (§10.12). Other inputs, such as an interval, a binary value, a tuple, an array, a bag or an Ion value, are not specified yet (see [Unresolved questions](#unresolved-questions)).
+**Inputs.** A value of type `JSON` is nested as it is. A string, number or boolean becomes an SQL/JSON scalar. A `REAL` or `DOUBLE PRECISION` that is `Infinity` or `NaN` is not accepted, as in `JSON_SCALAR`. A datetime is cast to `STRING` and becomes an SQL/JSON string scalar (§6.34). A string is not parsed, unless it is followed by `FORMAT JSON`, or it is the result of a constructor or of `JSON_QUERY`, which implies `FORMAT JSON` (§10.12). An input of any other SQL type, such as an interval, is cast to `STRING` and becomes an SQL/JSON string scalar (§6.34, §10.11, ID100, IV179). A binary string input needs `FORMAT JSON`, and is parsed as JSON text (§6.34). Which binary types PartiQL accepts is open for later. A tuple, an array, a bag or an Ion value is not specified yet (see [Unresolved questions](#unresolved-questions)).
 
 ```sql
 JSON_ARRAY(1, true, 'x')                       ->  STRING '[1,true,"x"]'
@@ -274,13 +279,15 @@ JSON_OBJECT('d' : DATE '2024-01-01')           ->  STRING '{"d":"2024-01-01"}'  
 JSON_OBJECT('d' : JSON_SCALAR(DATE '2024-01-01'))  ->  JSON, whose member d holds DATE '2024-01-01'
 ```
 
-**`NULL` values.** `JSON_OBJECT` and `JSON_OBJECTAGG` default to `NULL ON NULL`, so a `NULL` value becomes SQL/JSON null. `JSON_ARRAY` and `JSON_ARRAYAGG` default to `ABSENT ON NULL`, so a `NULL` value is left out (§6.34, §10.11).
+**`NULL` values.** `JSON_OBJECT` and `JSON_OBJECTAGG` default to `NULL ON NULL`, so a `NULL` value becomes SQL/JSON null. `JSON_ARRAY` and `JSON_ARRAYAGG` default to `ABSENT ON NULL`, so a `NULL` value is left out (§6.34, §10.11). `ABSENT ON NULL` checks each value after it becomes an SQL/JSON item, so it also leaves out an SQL/JSON null, such as `p.note` or `JSON('null')` (§6.34 General Rule 3.c, §10.11 General Rule 5.g).
 
 ```sql
 JSON_OBJECT('id' : 7, 'note' : NULL)                  ->  STRING '{"id":7,"note":null}'
 JSON_OBJECT('id' : 7, 'note' : NULL ABSENT ON NULL)   ->  STRING '{"id":7}'
 JSON_ARRAY(1, NULL, 'x')                              ->  STRING '[1,"x"]'
 JSON_ARRAY(1, NULL, 'x' NULL ON NULL)                 ->  STRING '[1,null,"x"]'
+JSON_ARRAY(p.note)                                    ->  STRING '[]'          -- p.note is SQL/JSON null
+JSON_ARRAY(p.note NULL ON NULL)                       ->  STRING '[null]'
 ```
 
 **`MISSING` values.** A `MISSING` value leaves its member or element out, whichever null clause is used, as a `MISSING` attribute is left out of a tuple.
@@ -330,7 +337,7 @@ FROM orders AS o, JSON(o.payload).items AS i
 PartiQL has no `IS JSON` predicate, in any form. SQL:2023's `IS JSON` (§8.22) tests content, and two functions replace it, each named for what it tests:
 
 - `is_valid_json` tests content: whether a string holds valid JSON text, of a given shape.
-- `is_json_type` tests type: whether a value has type `JSON`.
+- `instanceof(x, JSON)` tests type: whether a value has type `JSON`.
 
 ### `is_valid_json`
 
@@ -365,29 +372,30 @@ is_valid_json('{"a": 1, "a": 2}', OBJECT, TRUE)       ->  false
 is_valid_json('{"a": {"b": 1, "b": 2}}', VALUE, TRUE) ->  false    -- the duplicate is nested
 ```
 
-**Inputs.** A string is tested as JSON text. A value of type `JSON` is always valid, and the shape and unique keys test the item itself. An input of another declared type, such as `is_valid_json(1)`, is a compile error.
+**Inputs.** A string is tested as JSON text. A value of type `JSON` is always valid, and the shape tests its SQL/JSON item. It is not parsed again, so the unique-keys argument has no effect on it (§8.22). An input of another declared type, such as `is_valid_json(1)`, is a compile error.
 
 ```sql
-is_valid_json(JSON('[1, 2]'), ARRAY)   ->  true
-is_valid_json(1)                       ->  a compile error
+is_valid_json(JSON('[1, 2]'), ARRAY)                   ->  true
+is_valid_json(JSON('{"a": 1, "a": 2}'), VALUE, TRUE)   ->  true
+is_valid_json(1)                                       ->  a compile error
 ```
 
-**An input whose type is not known.** When the type is not known at compile time and the value is neither a string nor a value of type `JSON` at runtime, the result is false.
+**An input whose type is not known.** When the type is not known at compile time and the value is neither a string nor a value of type `JSON` at runtime, the result is `MISSING` in permissive mode and an error in type checking mode.
 
 ```sql
 SELECT VALUE is_valid_json(x) FROM [JSON('{}'), '{}', 'abc', 5] AS x
--- << true, true, false, false >>
+-- << true, true, false, MISSING >> in permissive mode, an error for the last row in type checking mode
 ```
 
 **Absent inputs.** SQL `NULL` gives SQL `NULL`, and `MISSING` gives `MISSING`.
 
-### `is_json_type`
+### `instanceof`
 
 ```ebnf
-is_json_type = "IS_JSON_TYPE" "(" expression ")" ;
+instanceof = "INSTANCEOF" "(" expression "," "JSON" ")" ;
 ```
 
-`is_json_type(x)` is true when `x` has type `JSON`, including an SQL/JSON null. It follows PartiQL's type predicates, such as `x IS STRING`:
+`instanceof(x, JSON)` is true when `x` has type `JSON`, including an SQL/JSON null. It follows PartiQL's type predicates, such as `x IS STRING`:
 
 | Input | Result |
 |---|---|
@@ -397,12 +405,12 @@ is_json_type = "IS_JSON_TYPE" "(" expression ")" ;
 | `MISSING` | `MISSING` |
 
 ```sql
-is_json_type(JSON(o.payload))     ->  true
-is_json_type(o.payload)           ->  false     -- a STRING that holds JSON text
-is_json_type(JSON('null'))        ->  true      -- an SQL/JSON null
+instanceof(JSON(o.payload), JSON)     ->  true
+instanceof(o.payload, JSON)           ->  false     -- a STRING that holds JSON text
+instanceof(JSON('null'), JSON)        ->  true      -- an SQL/JSON null
 ```
 
-The result only gives new information when the type of `x` is not known at compile time. Otherwise the compiler already knows it.
+The result only gives new information when the type of `x` is not known at compile time. Otherwise the compiler already knows it. This RFC defines `instanceof` only for `JSON`.
 
 ## Querying JSON
 
@@ -429,7 +437,7 @@ A path string is written in the SQL/JSON path language, which SQL:2023 defines i
 
 ```ebnf
 json_value           = "JSON_VALUE" "(" json_api_common
-                       [ json_returning ]
+                       [ "RETURNING" data_type ]
                        [ json_value_behavior "ON" "EMPTY" ]
                        [ json_value_behavior "ON" "ERROR" ] ")" ;
 json_value_behavior  = "ERROR" | "NULL" | "DEFAULT" expression ;
@@ -483,11 +491,14 @@ JSON_VALUE('abc', 'lax $.a' ERROR ON ERROR)       ->  an error   -- in both mode
 | Wrapper in `JSON_QUERY` | `WITHOUT ARRAY WRAPPER`. `WITH WRAPPER` alone means `WITH UNCONDITIONAL ARRAY WRAPPER` |
 | Quotes in `JSON_QUERY` | `KEEP QUOTES` |
 
-**`PASSING`.** `PASSING x AS i` binds the path variable `$i` to the value of `x` (§9.46). A value of type `JSON` is passed as it is, and a string, number, boolean or datetime becomes an SQL/JSON scalar of the same type. A datetime is kept as a datetime. Other values, such as SQL `NULL`, `MISSING`, a tuple or an Ion value, are not specified yet (see [Unresolved questions](#unresolved-questions)).
+**`PASSING`.** `PASSING x AS i` binds the path variable `$i` to the value of `x` (§9.46). A value of type `JSON` is passed as it is, and a string, number, boolean or datetime becomes an SQL/JSON scalar of the same type. A datetime is kept as a datetime. An SQL `NULL` becomes SQL/JSON null. A value of any other SQL type, such as an interval, is cast to `STRING` first (IV165). With `FORMAT JSON`, or when the value is the result of a constructor or `JSON_QUERY`, a string is parsed as JSON text, and an SQL `NULL` becomes the empty sequence (§9.46 General Rule 11.b). `MISSING`, a tuple, an array, a bag or an Ion value is not specified yet (see [Unresolved questions](#unresolved-questions)).
 
 ```sql
 JSON_VALUE(p, 'lax $.items[$i].sku' PASSING 1 AS i)               ->  STRING 'B2'
 JSON_VALUE(JSON('{}'), 'lax $d.type()' PASSING DATE '2024-01-01' AS d)  ->  STRING 'date'
+JSON_VALUE(JSON('{}'), 'lax $s.a' PASSING '{"a": 5}' FORMAT JSON AS s)  ->  STRING '5'      -- parsed
+JSON_VALUE(JSON('{}'), 'lax $s.a' PASSING '{"a": 5}' AS s)              ->  NULL             -- a string scalar has no member a
+JSON_EXISTS(JSON('{}'), 'lax $n' PASSING NULL FORMAT JSON AS n)         ->  false            -- the empty sequence
 ```
 
 ### `JSON_VALUE`
@@ -587,7 +598,7 @@ p.customer['Tier']     ->  JSON "gold"    -- the same as p.customer."Tier"
 p.customer['tier']     ->  NULL           -- exact case
 ```
 
-**Array steps.** `[n]` reads an element, counting from 0. An index out of range gives SQL `NULL`. `x[e]`, where `e` is an expression, uses the value of `e` as the index. An index that is not a number is an error, so the result is SQL `NULL`.
+**Array steps.** `[n]` reads an element, counting from 0. An index out of range gives SQL `NULL`. `x[e]`, where `e` is an expression, uses the value of `e` as the index. This is a PartiQL extension: in SQL:2023 a subscript is copied into a path string, so it is an expression of the path language, not of SQL (§6.36, §9.46). An index that is not a number is an error, so the result is SQL `NULL`.
 
 ```sql
 p.items[0].sku         ->  JSON "A1"
@@ -612,7 +623,7 @@ p.customer.name = 'Bob'                      ->  not specified yet   -- a value 
 JSON_VALUE(p, 'lax $.customer.name') = 'Bob' ->  true
 ```
 
-**Repeated keys.** A step returns the first member with that key, in the order of the text (see [Duplicate keys](#parsing-json-text-jsontext)).
+**Repeated keys.** Which member a step returns, when an object has more than one member with the key, is up to the implementation (see [Duplicate keys](#parsing-json-text-jsontext)).
 
 **What comes before the steps.** The steps apply only to a value of type `JSON`. A string is not parsed, so `o.payload.customer` keeps today's behavior on a string. The value before the steps can be any expression of type `JSON`, including a function call, with or without parentheses.
 
@@ -683,11 +694,11 @@ JSON_VALUE(p, 'lax $.id' RETURNING INT) = 7      ->  true
 
 ### Type predicates
 
-A value of type `JSON` is not a tuple, an array or a string, so PartiQL's type predicates such as `x IS STRUCT`, `x IS LIST` and `x IS STRING` are false for it. To test for JSON, use `is_json_type`, and to test the shape of an SQL/JSON item, use `is_valid_json` (see [Testing JSON](#testing-json)).
+A value of type `JSON` is not a tuple, an array or a string, so PartiQL's type predicates such as `x IS STRUCT`, `x IS LIST` and `x IS STRING` are false for it. To test for JSON, use `instanceof(x, JSON)`, and to test the shape of an SQL/JSON item, use `is_valid_json` (see [Testing JSON](#testing-json)).
 
 ```sql
 p.customer IS STRUCT                   ->  false
-is_json_type(p.customer)               ->  true
+instanceof(p.customer, JSON)           ->  true
 is_valid_json(p.customer, OBJECT)      ->  true
 ```
 
@@ -698,28 +709,48 @@ This RFC implements SQL:2023's `JSON` type (T801) and follows SQL:2023 wherever 
 ## Where PartiQL differs
 
 1. **`MISSING`.** SQL:2023 has no `MISSING`. This RFC defines how `MISSING` behaves as an input to each operator, following PartiQL's rules for tuples.
-2. **Permissive mode.** SQL:2023 has only errors. This RFC defines permissive mode for invalid JSON text and wrongly typed input. Errors inside a query operator still go to `ON ERROR`, as in SQL:2023.
-3. **Types not known at compile time.** SQL:2023 decides result types from declared types. PartiQL is gradually typed, so the constructors decide for each row, and the aggregates for each group.
-4. **No `IS JSON`.** SQL:2023's `IS JSON` becomes the function `is_valid_json`, and PartiQL adds `is_json_type` as a type test.
+2. **Permissive mode.** SQL:2023 has only errors. This RFC defines permissive mode for invalid JSON text, numbers out of range and wrongly typed input. Errors inside a query operator still go to `ON ERROR`, as in SQL:2023.
+3. **Types not known at compile time.** SQL:2023 decides result types from declared types. PartiQL is gradually typed, so the constructors and `JSON_QUERY` decide for each row, and the aggregates for each group. SQL:2023 decides `JSON_QUERY`'s result type at compile time (§6.35 Syntax Rule 1).
+4. **No `IS JSON`.** SQL:2023's `IS JSON` becomes the function `is_valid_json`, and PartiQL adds `instanceof(x, JSON)` as a type test.
 5. **Bracket keys on JSON.** `x['name']` works on a value of type `JSON`, as it does on a tuple. SQL:2023 has no bracket key.
-6. **Steps after a function call.** A path step can follow `JSON(...)` or `JSON_SCALAR(...)` without parentheses. This is an open question.
-7. **Iteration in `FROM`.** An SQL/JSON array can be iterated in `FROM`. SQL:2023 turns JSON into rows only through `JSON_TABLE`.
-8. **Ion values.** SQL:2023 has no Ion type. This RFC allows a CAST from an Ion value to JSON.
-9. **Keywords.** SQL:2023 reserves `JSON` and the JSON operator names. PartiQL keeps them non-reserved, so existing names keep working.
+6. **An SQL expression as a subscript.** `x[e]` takes an SQL expression, such as `p.items[t.i]`. In SQL:2023 a subscript is part of the path language.
+7. **Steps after a function call.** A path step can follow `JSON(...)` or `JSON_SCALAR(...)` without parentheses.
+8. **Iteration in `FROM`.** An SQL/JSON array can be iterated in `FROM`. SQL:2023 turns JSON into rows only through `JSON_TABLE`.
+9. **Ion values.** SQL:2023 has no Ion type. This RFC allows a CAST from an Ion value to JSON.
+10. **Keywords.** SQL:2023 reserves `JSON` and the JSON operator names. PartiQL keeps them non-reserved, so existing names keep working.
 
 ## Conformance
 
-PartiQL claims these SQL:2023 features once implemented:
+SQL:2023 groups its optional behavior into numbered features. A product claims a feature only when it implements all of it, and a feature that depends on another can only be claimed with it (Table 42, "Implied feature relationships"). So this section has three lists.
+
+**Claimed.** PartiQL implements these in full, and claims them once implemented:
 
 - T801 (JSON data type), T802 (`JSON(...)` with unique keys), T803 (string-based JSON).
 - T811 to T814 (constructors, `JSON_OBJECTAGG`, `JSON_ARRAYAGG` with `ORDER BY`, colon in `JSON_OBJECT`), T830 (unique keys in constructors).
-- T821 (basic query operators) in part: `JSON_VALUE`, `JSON_QUERY` and `JSON_EXISTS`, without `IS JSON` and `JSON_TABLE`.
-- T823 (`PASSING`), T825 and T826 (`ON EMPTY`, `ON ERROR`), T828 (`JSON_QUERY`), T829 (array wrappers).
+- T828 (`JSON_QUERY`), T829 (array wrappers).
 - T831 to T837 and T840 (the path language), T865 to T878 (item methods).
 - T851 (`FORMAT JSON` where it is the default).
-- T860, T861 and T864 (the simplified accessor).
 
-It does not claim T822 (`IS JSON WITH UNIQUE KEYS`, replaced by `is_valid_json`), the `JSON_TABLE` features (T824, T827, T838), T862 and T863 (wildcards and item methods in the simplified accessor), or the comparison features (T879 to T882), which are under [Unresolved questions](#unresolved-questions).
+**Implemented in part, so not claimed.** PartiQL implements most of each of these, but not all of it, or it depends on a feature that is not implemented in full:
+
+| Feature | What PartiQL implements | What is missing |
+|---|---|---|
+| T821, basic query operators | `JSON_VALUE` and `JSON_EXISTS` | `IS JSON` (replaced by `is_valid_json`) and `JSON_TABLE`. T821 is all four (Annex A, item 347) |
+| T822, `IS JSON WITH UNIQUE KEYS` | The same test, as `is_valid_json(x, VALUE, TRUE)` | The `IS JSON` syntax. Also depends on T821 |
+| T823, `PASSING` | All of it | Nothing of its own. It depends on T821 |
+| T825, `ON EMPTY` and `ON ERROR` | All of it | Nothing of its own. It depends on T821 |
+| T826, an expression in `ON EMPTY` and `ON ERROR` | All of it | Nothing of its own. It depends on T825, so on T821 |
+| T860, the simplified accessor on a column | Member steps such as `p.a.b`, and array steps such as `p.items[0]` | The rest of §6.36's grammar: `[*]`, subscript lists and ranges, `last`, and item methods such as `p.a.number()`. They are open for later |
+| T861, case-sensitive member names in the accessor | All of it | Nothing of its own. It depends on T860 |
+| T864, the simplified accessor on any expression | Steps on any expression of type `JSON` | The same as T860, which it depends on |
+
+If a later RFC adds `IS JSON`, `JSON_TABLE` and the rest of §6.36, these become claimable without any change to the rules here.
+
+**Not implemented.**
+
+- The `JSON_TABLE` features (T824, T827, T838).
+- T862 (the wildcard member accessor `.*`) and T863 (a single-quoted string literal as a member accessor, `.'name'`). Both are open for later.
+- The comparison features (T879 to T882), which are under [Unresolved questions](#unresolved-questions).
 
 # Drawbacks
 
@@ -727,7 +758,7 @@ It does not claim T822 (`IS JSON WITH UNIQUE KEYS`, replaced by `is_valid_json`)
 - **JSON and Ion values behave differently.** An Ion null is SQL `NULL`, an Ion value is converted to make an operation work, and Ion values mix with other types in `CASE` and `COALESCE`. A value of type `JSON` does none of these.
 - **A datetime in JSON cannot be written as JSON text.** `JSON_SERIALIZE` on it fails, as SQL:2023 says. None of the engines run does this, so queries moved from them can fail here.
 - **The constructors return a `STRING` by default**, as SQL:2023 says. Users of PostgreSQL, where they return `json`, may expect JSON.
-- **Duplicate keys return the first member.** PostgreSQL returns the last, and some engines reject duplicates. A query translated to them can give a different answer for rows with duplicate keys.
+- **Which member a repeated key returns is up to the implementation.** Engines differ too: PostgreSQL returns the last, Oracle and DuckDB the first, and Spark rejects duplicates. A query that reads a repeated key can give different answers on different engines.
 - **In type checking mode, a query operator can return `NULL` where `JSON(...)` raises an error,** because errors inside a query operator go to `ON ERROR`.
 
 # Rationale and alternatives
@@ -735,8 +766,9 @@ It does not claim T822 (`IS JSON WITH UNIQUE KEYS`, replaced by `is_valid_json`)
 - **A separate `JSON` type, not the Ion type.** Ion has types JSON lacks, such as symbols and annotations, and JSON has a null that is not SQL `NULL`. Changing Ion values to behave like JSON would change existing queries.
 - **SQL:2023's `JSON` type in full (T801), including datetime.** The alternative was PostgreSQL's model, where JSON holds only JSON's own kinds. PostgreSQL does not implement T801.
 - **PartiQL's rules where SQL:2023 has none.** `MISSING`, permissive mode and types not known at compile time follow the rules PartiQL already uses for tuples, so one query behaves the same way whatever kind of value a row holds.
-- **Two functions instead of `IS JSON`.** `x IS JSON` would read like PartiQL's type predicates, such as `x IS STRING`, but test content.
-- **Keep every member for a duplicate key, and return the first.** It loses no data, and matches PartiQL's tuples and Ion structs.
+- **Two functions instead of `IS JSON`.** `x IS JSON` would read like PartiQL's type predicates, such as `x IS STRING`, but test content. The type test takes a type name, `instanceof(x, JSON)`, so it can cover other types later.
+- **SQL:2023's limits for numbers.** A float out of range is rejected, rather than becoming `Infinity`, so every SQL/JSON item can be written back as JSON text.
+- **Keep every member for a duplicate key, and leave which one a step returns to the implementation.** It loses no data, and matches Ion and PartiQL's rule for unordered tuples.
 - **Results decided per row, or per group, when a type is not known.** Deciding at compile time would give a `STRING` even for rows whose input is JSON.
 - **The SQL/JSON path language by reference.** This RFC changes nothing in it.
 
@@ -759,17 +791,19 @@ All results were run on the versions shown, except the row of claims, which come
 
 # Unresolved questions
 
-## Questions for this review
+## Decided in the 11/20 review
 
-Each has a proposal in the RFC text, and an alternative, in an author comment marked **Open question, team input needed**. The team's answers decide the rule.
+The open questions of the review draft are decided. Each rule above states the decision, and its author comment gives the reasons.
 
-| Question | Where | Proposal | Alternative |
-|---|---|---|---|
-| A JSON number too large for its type, such as `1e400` | [Parsing JSON text](#parsing-json-text-jsontext), "A number out of range" | Not accepted: `MISSING` in permissive mode, an error in type checking mode | An SQL/JSON scalar that is `FLOAT` `Infinity`, as PartiQL's literal `1e400` |
-| Duplicate keys when parsing | [Parsing JSON text](#parsing-json-text-jsontext), "Duplicate keys" | Keep every member, as PostgreSQL's `json`, and return the first | Keep only the last, as PostgreSQL's `jsonb` |
-| A duplicate key with `WITH UNIQUE KEYS`, in permissive mode | [Parsing JSON text](#parsing-json-text-jsontext), "`WITH UNIQUE KEYS`" | `MISSING`, like invalid text | An error in both modes |
-| `is_valid_json(x)` when `x` has no known type and is neither a string nor JSON | [Testing JSON](#testing-json), "An input whose type is not known" | False, as a type predicate gives | `MISSING` in permissive mode, an error in type checking mode |
-| A path step directly after `JSON(...)` or `JSON_SCALAR(...)` | [Reading JSON with path steps](#reading-json-with-path-steps), "What comes before the steps" | Allowed with or without parentheses | Parentheses required, as SQL:2023 does |
+| Question | Decision | Where |
+|---|---|---|
+| Duplicate keys when parsing | Keep every member. Which one a step returns is up to the implementation | [Parsing JSON text](#parsing-json-text-jsontext), "Duplicate keys" |
+| `IS JSON`, or functions | No `IS JSON` for now. `is_valid_json` tests content, and `instanceof(x, JSON)` tests type | [Testing JSON](#testing-json) |
+| Unique keys in `is_valid_json` | A third argument, `TRUE` or `FALSE`. It has no effect on a value of type `JSON`, which is not parsed again | [Testing JSON](#testing-json), "Unique keys" |
+| `is_valid_json(x)` when `x` has no known type and is neither a string nor JSON | `MISSING` in permissive mode, an error in type checking mode | [Testing JSON](#testing-json), "An input whose type is not known" |
+| A number too large for its type, such as `1e400` | Not accepted, as SQL:2023 says. A long exact number stays exact. Parser limits are an error in both modes. `Infinity` and `NaN` can't go into JSON | [Parsing JSON text](#parsing-json-text-jsontext), "A number out of range" and "Limits" |
+| A duplicate key with `WITH UNIQUE KEYS`, in permissive mode | `MISSING`, like invalid text | [Parsing JSON text](#parsing-json-text-jsontext), "`WITH UNIQUE KEYS`" |
+| A path step directly after `JSON(...)` or `JSON_SCALAR(...)` | Allowed with or without parentheses | [Reading JSON with path steps](#reading-json-with-path-steps), "What comes before the steps" |
 
 ## Open for later
 
@@ -779,18 +813,19 @@ These need further design, and are not needed by the rules above. They are not q
 |---|---|---|
 | The exact text `JSON_SERIALIZE` writes: member order, whitespace, and how a number is spelled, such as `1e3` or `1000` | UV097 | Whether to fix the text. SQL:2023 calls an SQL/JSON object unordered (§4.48.3) and does not require an implementation to document its text. PostgreSQL's `jsonb` sorts keys by length, then by bytes, and writes `1e3` as `1000` |
 | `RETURNING` a binary string type, and `ENCODING` after `FORMAT JSON` | §6.37, §10.12 | Which binary string types PartiQL accepts, as input and as a result |
-| More steps in the simplified accessor: wildcards `.*` and `[*]`, several subscripts and ranges, `.'name'`, and item methods such as `j.a.number()` | §6.36, T862, T863 | Each overlaps PartiQL syntax: path wildcards, the tuple step `.'name'`, and function calls. Which to allow, and how they parse |
-| What `PASSING` gives for SQL `NULL`, `MISSING`, a tuple, an array, a bag or an Ion value | §9.46, §10.14 | What each becomes inside the path. SQL:2023 casts types it doesn't list to a string (IV165) |
-| Constructor inputs of other types: an interval, a binary value, a tuple, an array, a bag or an Ion value | §6.34 casts other SQL types to a string | Whether to accept each, and what it becomes. PostgreSQL gives `"1 day"` for an interval and `"\\x4142"` for binary |
+| More steps in the simplified accessor: wildcards `.*` and `[*]`, several subscripts and ranges, `last`, `.'name'`, and item methods such as `j.a.number()` | §6.36, T860 to T864 | Each overlaps PartiQL syntax: path wildcards, the tuple step `.'name'`, and function calls. Which to allow, and how they parse |
+| What `PASSING` gives for `MISSING`, a tuple, an array, a bag or an Ion value | Not in SQL:2023, which decides every SQL type (§9.46) | What each becomes inside the path |
+| Constructor inputs of a PartiQL-only type: a tuple, an array, a bag or an Ion value | Not in SQL:2023, which casts other SQL types to a string (§6.34) | Whether to accept each, and what it becomes |
 | Comparison, grouping and ordering of values of type `JSON`, with each other and with other types, including a `JSON` sort key in `JSON_ARRAYAGG` | T879 to T882 | Equality and ordering of SQL/JSON items (IA224, IA225). Whether `JSON('7') = 7` is `false`, as PartiQL's equality gives for other types, or an error, as SQL:2023 gives without T879 |
 | `JSON_TABLE` | §7.11, T824, T827, T838 | How it fits PartiQL's `FROM`, `MISSING` and execution modes |
+| `instanceof` for types other than `JSON` | Not in SQL:2023 | Whether a type matches its subtypes, what a parameterized type such as `DECIMAL(2,10)` means, and whether to add a test for a type family |
 | How `CAST(v AS JSON)` maps an Ion value to an SQL/JSON item | Not in SQL:2023 | How each Ion value maps, such as an Ion null, a typed null, a timestamp, a symbol, a blob or an annotated value |
 
 # Future possibilities
 
 - **A binary representation,** as PostgreSQL's `jsonb` has, for faster access. It would not change any result in this RFC, as long as it keeps every member in the order of the text.
 - **The questions under [Unresolved questions](#unresolved-questions),** such as comparison and `JSON_TABLE`.
-- **An explicit conversion from JSON to tuples and arrays,** as PartiQL lowers Ion values today. Because duplicate keys return the first member, as tuples do, it would not change which member a path returns.
+- **An explicit conversion from JSON to tuples and arrays,** as PartiQL lowers Ion values today.
 - **Functions from other engines,** such as Redshift's `JSON_EXTRACT_PATH_TEXT`, as extensions rather than as part of the language.
 
 # Appendix
@@ -815,10 +850,11 @@ Each section of this RFC adds to a chapter of the specification revamp in [#102]
 
 | Code | Choice | PartiQL |
 |---|---|---|
-| IV048, IV119 | The type of a numeric literal, and so of a JSON number | The type of the same PartiQL literal: `INT`, `DECIMAL` or `FLOAT` |
+| IV048, IV119 | The type of a numeric literal, and so of a JSON number | The type of the same PartiQL literal: `INT`, `BIGINT`, `DECIMAL` or `DOUBLE PRECISION` |
 | UA057 | Whether parsing drops members with duplicate keys | Keeps every member |
 | US039 | The order parsing reads members in | The order of the text |
-| UA075 | Which member a path step returns when keys repeat | The first, in the order of the text |
+| IL039 to IL041, IL049 to IL052 | Limits on the size of SQL/JSON items, keys and strings | Left to the implementation. Going over a limit is an error in both modes |
+| UA075 | Which member a path step returns when keys repeat | Left to the implementation |
 | IA071 | Whether a path step raises an error for duplicate keys | No error, in either mode |
 | ID074 | The string type `JSON_VALUE` returns by default | `STRING` |
 | ID101 | The string type `JSON_QUERY` returns for a string input | `STRING` |
