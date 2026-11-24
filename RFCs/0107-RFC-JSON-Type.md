@@ -219,7 +219,7 @@ JSON_SCALAR(10.5)                  ->  JSON 10.5
 JSON_SCALAR('Bob')                 ->  JSON "Bob"
 JSON_SCALAR(DATE '2024-01-01')     ->  an SQL/JSON scalar that is DATE '2024-01-01'
 JSON_SCALAR(INTERVAL '1' DAY)      ->  a compile error
-JSON_SCALAR(1e400)                 ->  MISSING in permissive mode, an error in type checking mode   -- the literal is Infinity
+JSON_SCALAR(t.d)                   ->  MISSING in permissive mode, an error in type checking mode   -- t.d is a DOUBLE PRECISION that is Infinity
 ```
 
 **Absent inputs.** SQL `NULL` gives SQL `NULL`, not SQL/JSON null (§6.41). `MISSING` gives `MISSING`.
@@ -305,7 +305,7 @@ JSON_OBJECT(NULL : 7)                                 ->  an error
 JSON_OBJECT(t.k : 1, 'b' : 2)                         ->  STRING '{"b":2}' in permissive mode, an error in type checking mode   -- t has no attribute k
 ```
 
-**Duplicate keys.** By default, `WITHOUT UNIQUE KEYS`, members with the same key are all kept. With `WITH UNIQUE KEYS`, a duplicate key is not accepted: the result is `MISSING` in permissive mode and an error in type checking mode (see the open question under [`WITH UNIQUE KEYS`](#parsing-json-text-jsontext)).
+**Duplicate keys.** By default, `WITHOUT UNIQUE KEYS`, members with the same key are all kept. With `WITH UNIQUE KEYS`, a duplicate key is not accepted: the result is `MISSING` in permissive mode and an error in type checking mode.
 
 ```sql
 JSON_OBJECT('a' : 1, 'a' : 2)                         ->  STRING '{"a":1,"a":2}'
@@ -859,11 +859,11 @@ Each section of this RFC adds to a chapter of the specification revamp in [#102]
 | ID074 | The string type `JSON_VALUE` returns by default | `STRING` |
 | ID101 | The string type `JSON_QUERY` returns for a string input | `STRING` |
 | ID098, ID134 | The string type a constructor or aggregate returns by default | `STRING` |
-| ID100 | The string type a constructor casts a datetime input to | `STRING` |
+| ID100, IV179 | The string type a constructor or aggregate casts a datetime or other SQL input to | `STRING` |
 | ID102 | The string type of a `JSON_SERIALIZE` result | `STRING` |
 | IA050 | When a query operator parses a string input | Before the path runs. An invalid input goes to `ON ERROR` either way |
 | IV185 | The unique-keys check a query operator applies when it parses a string input | `WITHOUT UNIQUE KEYS`, as `JSON(...)` |
-| IV165 | The string type `PASSING` casts other types to | Not specified yet |
+| IV165 | The string type `PASSING` casts other types to | `STRING` |
 | UV097 | The exact text of serialized JSON | Not specified yet |
 
 # References
